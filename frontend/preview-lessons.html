@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>My Lessons</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@300;400;500;600;700&family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700;9..144,800&display=swap" rel="stylesheet" />
+<script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --cream: #F7F3EB; --cream-dark: #EDE7DA; --sage: #8B9E7E; --sage-dark: #6B7F5E;
+    --olive: #5C6B4F; --sand: #E2D9C8; --bark: #3D3929; --bark-light: #7A7265;
+    --terracotta: #B5594E; --white: #FFFFFF;
+  }
+  body { font-family: 'Albert Sans', sans-serif; background: var(--cream); color: var(--bark); min-height: 100vh; position: relative; }
+  .grain { pointer-events: none; position: fixed; inset: 0; opacity: 0.035; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E"); background-repeat: repeat; background-size: 128px 128px; z-index: 0; }
+  .page { position: relative; z-index: 1; max-width: 48rem; margin: 0 auto; padding: 2rem 1.5rem; }
+  .back-link { display: inline-flex; align-items: center; gap: 4px; font-size: 0.875rem; color: var(--bark-light); text-decoration: none; margin-bottom: 1rem; }
+  h1 { font-family: 'Fraunces', serif; font-size: 1.875rem; font-weight: 700; color: var(--bark); }
+  .subtitle { color: var(--bark-light); margin-top: 0.25rem; }
+  .card { display: block; background: var(--white); border-radius: 1rem; border: 1px solid var(--sand); box-shadow: 0 1px 3px rgba(0,0,0,0.04); padding: 1.25rem; text-decoration: none; color: inherit; margin-bottom: 0.75rem; transition: box-shadow 0.2s, border-color 0.2s; }
+  .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.07); border-color: rgba(139,158,126,0.3); }
+  .card-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  .card-title { font-family: 'Fraunces', serif; font-size: 1.125rem; font-weight: 600; color: var(--bark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card-meta { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.375rem; flex-wrap: wrap; }
+  .card-meta span { font-size: 0.875rem; color: var(--bark-light); }
+  .card-meta .sep { color: rgba(122,114,101,0.3); }
+  .score-badge { display: inline-flex; align-items: center; padding: 0.125rem 0.625rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; border: 1px solid; flex-shrink: 0; }
+  .score-good { color: var(--sage-dark); background: rgba(139,158,126,0.1); border-color: rgba(139,158,126,0.3); }
+  .score-low { color: var(--terracotta); background: rgba(181,89,78,0.1); border-color: rgba(181,89,78,0.3); }
+  .badge-muted { color: var(--bark-light); background: var(--cream-dark); border-color: var(--sand); font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="page">
+  <a href="#" class="back-link">
+    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+    Dashboard
+  </a>
+  <h1>My Lessons</h1>
+  <p class="subtitle">Your completed and in-progress lessons</p>
+
+  <div style="margin-top: 2rem;">
+    <!-- Lesson 1 -->
+    <a href="#" class="card">
+      <div class="card-row">
+        <div style="min-width: 0; flex: 1;">
+          <div class="card-title">La vie dans les villes du futur</div>
+          <div class="card-meta">
+            <span>&#127467;&#127479; French</span>
+            <span class="sep">|</span>
+            <span>Intermediate</span>
+            <span class="sep">|</span>
+            <span>Mar 18, 2026</span>
+          </div>
+        </div>
+        <span class="score-badge score-good">84%</span>
+      </div>
+    </a>
+
+    <!-- Lesson 2 -->
+    <a href="#" class="card">
+      <div class="card-row">
+        <div style="min-width: 0; flex: 1;">
+          <div class="card-title">El impacto de la inteligencia artificial en la educacion</div>
+          <div class="card-meta">
+            <span>&#127466;&#127480; Spanish</span>
+            <span class="sep">|</span>
+            <span>Advanced</span>
+            <span class="sep">|</span>
+            <span>Mar 15, 2026</span>
+          </div>
+        </div>
+        <span class="score-badge score-good">92%</span>
+      </div>
+    </a>
+
+    <!-- Lesson 3 -->
+    <a href="#" class="card">
+      <div class="card-row">
+        <div style="min-width: 0; flex: 1;">
+          <div class="card-title">Les changements climatiques et leurs consequences</div>
+          <div class="card-meta">
+            <span>&#127467;&#127479; French</span>
+            <span class="sep">|</span>
+            <span>Intermediate</span>
+            <span class="sep">|</span>
+            <span>Mar 12, 2026</span>
+          </div>
+        </div>
+        <span class="score-badge score-low">58%</span>
+      </div>
+    </a>
+
+    <!-- Lesson 4 -->
+    <a href="#" class="card">
+      <div class="card-row">
+        <div style="min-width: 0; flex: 1;">
+          <div class="card-title">&#26481;&#20140;&#12398;&#26410;&#26469;&#37117;&#24066;&#35336;&#30011;</div>
+          <div class="card-meta">
+            <span>&#127471;&#127477; Japanese</span>
+            <span class="sep">|</span>
+            <span>Beginner</span>
+            <span class="sep">|</span>
+            <span>Mar 10, 2026</span>
+          </div>
+        </div>
+        <span class="score-badge score-good">76%</span>
+      </div>
+    </a>
+
+    <!-- Lesson 5 - In Progress -->
+    <a href="#" class="card">
+      <div class="card-row">
+        <div style="min-width: 0; flex: 1;">
+          <div class="card-title">&#54620;&#44397;&#51032; &#51204;&#53685;&#51020;&#49885; &#47928;&#54868;</div>
+          <div class="card-meta">
+            <span>&#127472;&#127479; Korean</span>
+            <span class="sep">|</span>
+            <span>Beginner</span>
+            <span class="sep">|</span>
+            <span>Mar 8, 2026</span>
+          </div>
+        </div>
+        <span class="score-badge badge-muted">In Progress</span>
+      </div>
+    </a>
+
+    <!-- Lesson 6 -->
+    <a href="#" class="card">
+      <div class="card-row">
+        <div style="min-width: 0; flex: 1;">
+          <div class="card-title">La gastronomia espanola: tradicion e innovacion</div>
+          <div class="card-meta">
+            <span>&#127466;&#127480; Spanish</span>
+            <span class="sep">|</span>
+            <span>Intermediate</span>
+            <span class="sep">|</span>
+            <span>Mar 5, 2026</span>
+          </div>
+        </div>
+        <span class="score-badge score-good">88%</span>
+      </div>
+    </a>
+  </div>
+</div>
+</body>
+</html>

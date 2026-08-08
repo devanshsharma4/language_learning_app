@@ -1,0 +1,40 @@
+# Secrets — NEVER commit these.
+# .env holds the real DATABASE_URL, JWT_SECRET, and ANTHROPIC_API_KEY.
+# .env.example is committed on purpose: it documents the required keys with dummy values.
+.env
+.env.*
+!.env.example
+
+# Dependencies — reinstalled from package-lock.json with `npm install`
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+
+# Local-only Claude Code settings (shared config would go in .claude/settings.json)
+.claude/settings.local.json
+
+# Local working docs — kept off the public repo by choice, not by necessity.
+# Project setup and architecture for outside readers live in README.md.
+CLAUDE.md
+LEARNINGS.md

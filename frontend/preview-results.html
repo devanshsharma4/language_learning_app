@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lesson Results Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@300;400;500;600;700&family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700;9..144,800&display=swap" rel="stylesheet" />
+<script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --cream: #F7F3EB;
+    --cream-dark: #EDE7DA;
+    --sage: #8B9E7E;
+    --sage-dark: #6B7F5E;
+    --moss: #A4B494;
+    --olive: #5C6B4F;
+    --sand: #E2D9C8;
+    --bark: #3D3929;
+    --bark-light: #7A7265;
+    --terracotta: #B5594E;
+    --white: #FFFFFF;
+  }
+
+  body {
+    font-family: 'Albert Sans', sans-serif;
+    background: var(--cream);
+    color: var(--bark);
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  .grain {
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 128px 128px;
+    z-index: 0;
+  }
+
+  .page { position: relative; z-index: 1; max-width: 48rem; margin: 0 auto; padding: 2rem 1.5rem; }
+
+  .font-display { font-family: 'Fraunces', serif; }
+
+  /* Back link */
+  .back-link {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 0.875rem; color: var(--bark-light); text-decoration: none;
+    margin-bottom: 1rem; transition: color 0.2s;
+  }
+  .back-link:hover { color: var(--bark); }
+
+  h1 { font-family: 'Fraunces', serif; font-size: 1.875rem; font-weight: 700; color: var(--bark); }
+  .subtitle { color: var(--bark-light); margin-top: 0.25rem; font-size: 1rem; }
+
+  /* Card base */
+  .card {
+    background: var(--white); border-radius: 1rem; border: 1px solid var(--sand);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04); padding: 1.5rem;
+  }
+  .card-lg { padding: 1.25rem 2rem; }
+
+  /* Score Summary */
+  .score-summary { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
+  .score-ring-wrap { position: relative; width: 120px; height: 120px; flex-shrink: 0; }
+  .score-ring-wrap svg { transform: rotate(-90deg); }
+  .score-ring-track { fill: none; stroke: rgba(139,158,126,0.2); stroke-width: 8; }
+  .score-ring-fill { fill: none; stroke: var(--sage); stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset 0.8s ease-out; }
+  .score-ring-label {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-family: 'Fraunces', serif; font-size: 1.5rem; font-weight: 700; color: var(--sage-dark);
+  }
+  .stats-grid { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+  .stat-label { font-size: 0.875rem; color: var(--bark-light); margin-bottom: 0.25rem; text-align: center; }
+  .stat-value { font-family: 'Fraunces', serif; font-size: 1.25rem; font-weight: 600; color: var(--bark); text-align: center; }
+  .stat-sub { font-size: 0.75rem; color: rgba(122,114,101,0.6); text-align: center; margin-top: 2px; }
+
+  /* Overall feedback */
+  .overall-feedback {
+    margin-top: 2rem; background: rgba(139,158,126,0.1); border: 1px solid rgba(139,158,126,0.2);
+    border-radius: 1rem; padding: 1.5rem;
+  }
+  .overall-feedback h3 { font-family: 'Fraunces', serif; font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem; }
+  .overall-feedback p { color: var(--bark-light); line-height: 1.6; }
+
+  /* Divider */
+  .divider { display: flex; align-items: center; gap: 0.75rem; margin: 2.5rem 0; }
+  .divider span.line { flex: 1; height: 1px; background: var(--sand); }
+  .divider span.label {
+    font-size: 0.75rem; color: rgba(122,114,101,0.5); font-weight: 500;
+    letter-spacing: 0.05em; text-transform: uppercase;
+  }
+
+  /* Section headings */
+  .section-title { font-family: 'Fraunces', serif; font-size: 1.5rem; font-weight: 600; margin-bottom: 1.5rem; }
+
+  /* MCQ */
+  .mcq-card { margin-bottom: 1rem; }
+  .q-text { font-weight: 500; margin-bottom: 1rem; }
+  .q-num { color: var(--sage-dark); margin-right: 0.5rem; }
+  .options { display: flex; flex-direction: column; gap: 0.5rem; margin-left: 1.5rem; }
+  .option {
+    display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem;
+    border-radius: 0.75rem; border: 1px solid; transition: all 0.2s;
+  }
+  .option.correct { border-color: var(--sage); background: rgba(139,158,126,0.1); }
+  .option.incorrect { border-color: var(--terracotta); background: rgba(181,89,78,0.1); }
+  .option.neutral { border-color: rgba(226,217,200,0.5); background: rgba(255,255,255,0.5); opacity: 0.6; }
+  .badge {
+    flex-shrink: 0; width: 1.75rem; height: 1.75rem; border-radius: 50%; border: 2px solid;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.875rem; font-weight: 600;
+  }
+  .badge.correct { border-color: var(--sage); background: var(--sage); color: white; }
+  .badge.incorrect { border-color: var(--terracotta); background: var(--terracotta); color: white; }
+  .badge.neutral { border-color: var(--sand); color: var(--bark-light); }
+  .option-text { flex: 1; }
+  .icon-check, .icon-x { flex-shrink: 0; width: 1.25rem; height: 1.25rem; }
+  .icon-check { color: var(--sage-dark); }
+  .icon-x { color: var(--terracotta); }
+
+  /* Score badge */
+  .score-badge {
+    flex-shrink: 0; padding: 0.25rem 0.75rem; border-radius: 9999px;
+    font-size: 0.875rem; font-weight: 600;
+  }
+  .score-good { color: var(--sage-dark); background: rgba(139,158,126,0.1); }
+  .score-low { color: var(--terracotta); background: rgba(181,89,78,0.1); }
+
+  /* Blockquote */
+  .user-answer {
+    margin-left: 1.5rem; padding-left: 1rem; border-left: 2px solid var(--sand);
+    color: var(--bark-light); font-style: italic; margin-bottom: 1rem;
+  }
+  .ai-feedback { margin-left: 1.5rem; font-size: 0.875rem; color: var(--bark-light); line-height: 1.6; }
+
+  /* Writing */
+  .prompt-text { font-weight: 500; font-style: italic; }
+  .prompt-num { font-style: normal; color: var(--sage-dark); margin-right: 0.5rem; }
+  .strengths-title { font-size: 0.875rem; font-weight: 500; color: var(--sage-dark); margin-bottom: 0.5rem; margin-left: 1.5rem; }
+  .improve-title { font-size: 0.875rem; font-weight: 500; color: var(--terracotta); margin-bottom: 0.5rem; margin-left: 1.5rem; }
+  .feedback-list { list-style: none; margin-left: 1.5rem; }
+  .feedback-list li { display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.875rem; color: var(--bark-light); margin-bottom: 0.25rem; }
+  .feedback-list li svg { flex-shrink: 0; width: 1rem; height: 1rem; margin-top: 2px; }
+  .icon-strength { color: var(--sage); }
+  .icon-improve { color: var(--terracotta); }
+
+  /* Grammar / Vocab corrections */
+  .correction-list { border-radius: 1rem; border: 1px solid var(--sand); background: white; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .correction-item { padding: 1rem 1.5rem; }
+  .correction-item + .correction-item { border-top: 1px solid var(--sand); }
+  .correction-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
+  .original-strike { text-decoration: line-through; color: var(--terracotta); }
+  .original-plain { color: var(--bark-light); }
+  .corrected { font-weight: 500; color: var(--sage-dark); }
+  .arrow-icon { width: 1rem; height: 1rem; color: var(--bark-light); flex-shrink: 0; }
+  .explanation { font-size: 0.875rem; color: var(--bark-light); }
+
+  /* Sections spacing */
+  .results-sections > div + div { margin-top: 2.5rem; }
+
+  /* Bottom nav */
+  .bottom-nav { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 3rem; margin-bottom: 2rem; flex-wrap: wrap; }
+  .btn-outline {
+    padding: 0.75rem 1.5rem; border: 1px solid var(--sand); border-radius: 1rem;
+    color: var(--bark); background: transparent; font-size: 1rem; cursor: pointer;
+    text-decoration: none; transition: all 0.2s;
+  }
+  .btn-outline:hover { background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .btn-primary {
+    padding: 0.75rem 1.5rem; background: var(--sage); color: white; border: none;
+    border-radius: 1rem; font-size: 1rem; font-weight: 600; cursor: pointer;
+    text-decoration: none; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: all 0.2s;
+  }
+  .btn-primary:hover { background: var(--sage-dark); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+
+  .header-row { display: flex; align-items: start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+  .writing-feedback-text { margin-left: 1.5rem; font-size: 0.875rem; color: var(--bark-light); line-height: 1.6; margin-bottom: 1rem; }
+</style>
+</head>
+<body>
+
+<div class="grain"></div>
+
+<div class="page">
+
+  <!-- Header -->
+  <a href="#" class="back-link">
+    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+    Dashboard
+  </a>
+  <h1 class="font-display">Lesson Results</h1>
+  <p class="subtitle">La vie dans les villes du futur</p>
+
+  <!-- Score Summary -->
+  <div class="card card-lg" style="margin-top: 2rem;">
+    <div class="score-summary">
+      <div class="score-ring-wrap">
+        <svg width="120" height="120" viewBox="0 0 120 120">
+          <circle class="score-ring-track" cx="60" cy="60" r="52" />
+          <circle class="score-ring-fill" cx="60" cy="60" r="52"
+            stroke-dasharray="326.73" stroke-dashoffset="52.28" />
+        </svg>
+        <div class="score-ring-label">84%</div>
+      </div>
+      <div class="stats-grid">
+        <div>
+          <p class="stat-label">Multiple Choice</p>
+          <p class="stat-value font-display">7/8</p>
+          <p class="stat-sub">88%</p>
+        </div>
+        <div>
+          <p class="stat-label">Short Answer</p>
+          <p class="stat-value font-display">7.5/10</p>
+          <p class="stat-sub">avg score</p>
+        </div>
+        <div>
+          <p class="stat-label">Writing</p>
+          <p class="stat-value font-display">8.0/10</p>
+          <p class="stat-sub">avg score</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Overall Feedback -->
+  <div class="overall-feedback">
+    <h3 class="font-display">Overall Feedback</h3>
+    <p>Excellent work on this lesson! You demonstrated strong reading comprehension and a solid grasp of the vocabulary. Your writing shows good command of French sentence structure. Focus on refining your use of subjunctive mood and expanding your connective vocabulary for even more natural-sounding prose.</p>
+  </div>
+
+  <!-- Divider -->
+  <div class="divider">
+    <span class="line"></span>
+    <span class="label">Detailed Results</span>
+    <span class="line"></span>
+  </div>
+
+  <div class="results-sections">
+
+    <!-- MCQ Results -->
+    <div>
+      <h2 class="section-title font-display">Multiple Choice</h2>
+
+      <!-- Q1 - Correct -->
+      <div class="card mcq-card">
+        <p class="q-text"><span class="q-num">1.</span>What role do vertical gardens play in the cities of the future?</p>
+        <div class="options">
+          <div class="option neutral">
+            <span class="badge neutral">A</span>
+            <span class="option-text">They are purely decorative additions to buildings</span>
+          </div>
+          <div class="option correct">
+            <span class="badge correct">B</span>
+            <span class="option-text">They purify the air and provide fresh food to residents</span>
+            <svg class="icon-check" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+          </div>
+          <div class="option neutral">
+            <span class="badge neutral">C</span>
+            <span class="option-text">They replace traditional parks entirely</span>
+          </div>
+          <div class="option neutral">
+            <span class="badge neutral">D</span>
+            <span class="option-text">They generate electricity for the buildings</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Q2 - Incorrect -->
+      <div class="card mcq-card">
+        <p class="q-text"><span class="q-num">2.</span>How will public transportation change in future cities?</p>
+        <div class="options">
+          <div class="option incorrect">
+            <span class="badge incorrect">A</span>
+            <span class="option-text">It will be powered by fossil fuels but more efficient</span>
+            <svg class="icon-x" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          </div>
+          <div class="option neutral">
+            <span class="badge neutral">B</span>
+            <span class="option-text">Private cars will be completely banned</span>
+          </div>
+          <div class="option correct">
+            <span class="badge correct">C</span>
+            <span class="option-text">It will be fully electric and autonomous</span>
+            <svg class="icon-check" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+          </div>
+          <div class="option neutral">
+            <span class="badge neutral">D</span>
+            <span class="option-text">Only bicycles will be allowed</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Q3 - Correct -->
+      <div class="card mcq-card">
+        <p class="q-text"><span class="q-num">3.</span>What is described as the fundamental pillar of these future cities?</p>
+        <div class="options">
+          <div class="option neutral">
+            <span class="badge neutral">A</span>
+            <span class="option-text">Technology and artificial intelligence</span>
+          </div>
+          <div class="option neutral">
+            <span class="badge neutral">B</span>
+            <span class="option-text">Community spaces and social interaction</span>
+          </div>
+          <div class="option correct">
+            <span class="badge correct">C</span>
+            <span class="option-text">Sustainability</span>
+            <svg class="icon-check" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+          </div>
+          <div class="option neutral">
+            <span class="badge neutral">D</span>
+            <span class="option-text">Economic growth and development</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Short Answer Results -->
+    <div>
+      <h2 class="section-title font-display">Short Answer</h2>
+
+      <div class="card" style="margin-bottom: 1rem;">
+        <div class="header-row">
+          <p class="q-text"><span class="q-num">1.</span>In your own words, explain how the article envisions the relationship between technology and nature in future cities. Do you think this vision is realistic?</p>
+          <span class="score-badge score-good">8/10</span>
+        </div>
+        <blockquote class="user-answer">The article describes a future where technology and nature work together harmoniously. Smart buildings manage their own energy while vertical gardens cover facades, cleaning the air and growing food. I think parts of this vision are realistic since we already see green buildings today, but achieving full harmony will take decades of policy changes.</blockquote>
+        <div class="ai-feedback">Strong response that accurately captures the article's key theme of coexistence. Good use of specific examples (smart buildings, vertical gardens). Your personal opinion is well-reasoned. Consider incorporating the French vocabulary from the lesson, such as "cohabitent" and "durabilite," to strengthen your answer.</div>
+      </div>
+
+      <div class="card">
+        <div class="header-row">
+          <p class="q-text"><span class="q-num">2.</span>What changes would you most like to see in your own city based on the ideas in the article?</p>
+          <span class="score-badge score-good">7/10</span>
+        </div>
+        <blockquote class="user-answer">I would love to see more green spaces and better public transit in my city. The idea of autonomous electric buses would reduce pollution a lot. Community spaces like the ones mentioned would also help people connect more.</blockquote>
+        <div class="ai-feedback">Good connection between article ideas and personal experience. You could strengthen this by being more specific about your city's current challenges and how the article's solutions would address them directly.</div>
+      </div>
+    </div>
+
+    <!-- Writing Results -->
+    <div>
+      <h2 class="section-title font-display">Writing</h2>
+
+      <div class="card" style="margin-bottom: 1rem;">
+        <div class="header-row">
+          <p class="prompt-text"><span class="prompt-num">1.</span>Decrivez votre ville ideale du futur. Quelles caracteristiques aurait-elle, et comment la vie quotidienne serait-elle differente d'aujourd'hui?</p>
+          <span class="score-badge score-good">8/10</span>
+        </div>
+        <blockquote class="user-answer" style="font-style: normal;">Ma ville ideale du futur serait un endroit ou la nature et la technologie cohabitent en harmonie. Les batiments seraient couverts de jardins verticaux, et les transports seraient entierement electriques. Les espaces communautaires favoriseraient les rencontres entre les habitants. La durabilite serait au coeur de chaque decision urbanistique.</blockquote>
+        <div class="writing-feedback-text">Excellent use of vocabulary from the lesson! Your response is well-structured and demonstrates good comprehension of the article's themes. The sentence variety is good, though some constructions could be more complex for intermediate level.</div>
+
+        <p class="strengths-title">Strengths</p>
+        <ul class="feedback-list">
+          <li>
+            <svg class="icon-strength" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+            Excellent integration of lesson vocabulary (cohabitent, favoriseraient, durabilite)
+          </li>
+          <li>
+            <svg class="icon-strength" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+            Clear and logical paragraph structure
+          </li>
+          <li>
+            <svg class="icon-strength" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+            Good use of conditional tense (serait, auraient)
+          </li>
+        </ul>
+
+        <p class="improve-title" style="margin-top: 0.75rem;">Areas to Improve</p>
+        <ul class="feedback-list">
+          <li>
+            <svg class="icon-improve" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 11l5-5m0 0l5 5m-5-5v12"/></svg>
+            Try using more complex sentence connectors (neanmoins, en revanche, par ailleurs)
+          </li>
+          <li>
+            <svg class="icon-improve" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 11l5-5m0 0l5 5m-5-5v12"/></svg>
+            Add more personal opinion or examples from your own experience
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Grammar Corrections -->
+    <div>
+      <h2 class="section-title font-display">Grammar Corrections</h2>
+      <div class="correction-list">
+        <div class="correction-item">
+          <div class="correction-row">
+            <span class="original-strike">Les batiments seraient couverts de jardins</span>
+            <svg class="arrow-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+            <span class="corrected">Les batiments seraient recouverts de jardins</span>
+          </div>
+          <p class="explanation">"Recouverts" is more precise here as it implies the gardens completely cover the surfaces, matching the article's description of facades being covered.</p>
+        </div>
+        <div class="correction-item">
+          <div class="correction-row">
+            <span class="original-strike">Les transports seraient entierement electriques</span>
+            <svg class="arrow-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+            <span class="corrected">Les transports en commun seraient entierement electriques</span>
+          </div>
+          <p class="explanation">Adding "en commun" specifies public transportation, which is what the article discusses. "Transports" alone is more general.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Vocabulary Suggestions -->
+    <div>
+      <h2 class="section-title font-display">Vocabulary Suggestions</h2>
+      <div class="correction-list">
+        <div class="correction-item">
+          <div class="correction-row">
+            <span class="original-plain">un endroit</span>
+            <svg class="arrow-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+            <span class="corrected">un lieu</span>
+          </div>
+          <p class="explanation">"Lieu" is slightly more formal and literary, better suited for descriptive writing about cities.</p>
+        </div>
+        <div class="correction-item">
+          <div class="correction-row">
+            <span class="original-plain">les rencontres</span>
+            <svg class="arrow-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+            <span class="corrected">l'interaction sociale</span>
+          </div>
+          <p class="explanation">Matches the article's phrasing and is more precise when discussing community-level engagement.</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Notes & Vocab divider -->
+  <div class="divider">
+    <span class="line"></span>
+    <span class="label">Your Notes</span>
+    <span class="line"></span>
+  </div>
+
+  <!-- My Notes textarea -->
+  <div style="margin-bottom: 1.5rem;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+      <h2 class="section-title font-display" style="margin-bottom: 0;">My Notes</h2>
+      <span style="font-size: 0.75rem; color: rgba(107,127,94,0.6);">Saved</span>
+    </div>
+    <textarea
+      rows="4"
+      placeholder="Jot down thoughts, things to remember, patterns you noticed..."
+      style="width: 100%; padding: 1rem; background: white; border-radius: 1rem; border: 1px solid var(--sand); color: var(--bark); font-family: 'Albert Sans', sans-serif; font-size: 1rem; resize: none; outline: none; box-shadow: 0 1px 3px rgba(0,0,0,0.04);"
+    >The concept of "cohabiter" is interesting - it implies more than just coexisting. The article uses a lot of "nominalisation" (gaspillage from gaspiller, consommation from consommer). Key pattern: "sera + past participle" for passive future tense.</textarea>
+  </div>
+
+  <!-- Saved Vocabulary (expanded) -->
+  <div style="margin-bottom: 1.5rem;">
+    <button id="vocab-toggle" onclick="var list=document.getElementById('vocab-list');var arrow=document.getElementById('vocab-arrow');if(list.style.display==='none'){list.style.display='flex';arrow.style.transform='rotate(90deg)';}else{list.style.display='none';arrow.style.transform='rotate(0deg)';}" style="display: flex; align-items: center; gap: 0.5rem; font-family: 'Fraunces', serif; font-size: 1.125rem; font-weight: 600; color: var(--bark); background: none; border: none; cursor: pointer; padding: 0; margin-bottom: 0.75rem;">
+      <svg id="vocab-arrow" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="transform: rotate(90deg); transition: transform 0.2s;"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+      Saved Vocabulary (4)
+    </button>
+    <div id="vocab-list" style="display: flex; flex-direction: column; gap: 0.5rem;">
+      <div style="background: white; border-radius: 0.75rem; border: 1px solid var(--sand); padding: 0.75rem 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+        <div style="display: flex; justify-content: space-between; align-items: baseline;">
+          <span style="font-weight: 500; color: var(--bark);">cohabitent</span>
+          <span style="font-size: 0.875rem; color: var(--sage-dark);">coexist</span>
+        </div>
+        <p style="font-size: 0.875rem; color: var(--bark-light); margin-top: 0.125rem;">To live or exist together in the same place or time</p>
+      </div>
+      <div style="background: white; border-radius: 0.75rem; border: 1px solid var(--sand); padding: 0.75rem 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+        <div style="display: flex; justify-content: space-between; align-items: baseline;">
+          <span style="font-weight: 500; color: var(--bark);">durabilite</span>
+          <span style="font-size: 0.875rem; color: var(--sage-dark);">sustainability</span>
+        </div>
+        <p style="font-size: 0.875rem; color: var(--bark-light); margin-top: 0.125rem;">The ability to maintain ecological balance without depleting natural resources</p>
+      </div>
+      <div style="background: white; border-radius: 0.75rem; border: 1px solid var(--sand); padding: 0.75rem 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+        <div style="display: flex; justify-content: space-between; align-items: baseline;">
+          <span style="font-weight: 500; color: var(--bark);">gaspillage</span>
+          <span style="font-size: 0.875rem; color: var(--sage-dark);">waste</span>
+        </div>
+        <p style="font-size: 0.875rem; color: var(--bark-light); margin-top: 0.125rem;">The careless or excessive use of something valuable</p>
+      </div>
+      <div style="background: white; border-radius: 0.75rem; border: 1px solid var(--sand); padding: 0.75rem 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+        <div style="display: flex; justify-content: space-between; align-items: baseline;">
+          <span style="font-weight: 500; color: var(--bark);">favoriseront</span>
+          <span style="font-size: 0.875rem; color: var(--sage-dark);">will encourage</span>
+        </div>
+        <p style="font-size: 0.875rem; color: var(--bark-light); margin-top: 0.125rem;">To promote or encourage the development of something</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Navigation -->
+  <div class="bottom-nav">
+    <a href="#" class="btn-outline">Review Article</a>
+    <a href="#" class="btn-primary">Back to Dashboard</a>
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Notes Overview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@300;400;500;600;700&family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700;9..144,800&display=swap" rel="stylesheet" />
+<script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --cream: #F7F3EB; --cream-dark: #EDE7DA; --sage: #8B9E7E; --sage-dark: #6B7F5E;
+    --olive: #5C6B4F; --sand: #E2D9C8; --bark: #3D3929; --bark-light: #7A7265;
+    --terracotta: #B5594E; --white: #FFFFFF;
+  }
+  body { font-family: 'Albert Sans', sans-serif; background: var(--cream); color: var(--bark); min-height: 100vh; position: relative; }
+  .grain { pointer-events: none; position: fixed; inset: 0; opacity: 0.035; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E"); background-repeat: repeat; background-size: 128px 128px; z-index: 0; }
+  .page { position: relative; z-index: 1; max-width: 48rem; margin: 0 auto; padding: 2rem 1.5rem; }
+  .back-link { display: inline-flex; align-items: center; gap: 4px; font-size: 0.875rem; color: var(--bark-light); text-decoration: none; margin-bottom: 1rem; }
+  h1 { font-family: 'Fraunces', serif; font-size: 1.875rem; font-weight: 700; color: var(--bark); }
+  .subtitle { color: var(--bark-light); margin-top: 0.25rem; }
+  .card { display: block; background: var(--white); border-radius: 1rem; border: 1px solid var(--sand); box-shadow: 0 1px 3px rgba(0,0,0,0.04); padding: 1.25rem; text-decoration: none; color: inherit; margin-bottom: 0.75rem; transition: box-shadow 0.2s, border-color 0.2s; }
+  .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.07); border-color: rgba(139,158,126,0.3); }
+  .card-inner { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+  .card-title { font-family: 'Fraunces', serif; font-size: 1.125rem; font-weight: 600; color: var(--bark); }
+  .card-meta { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.25rem; }
+  .card-meta span { font-size: 0.875rem; color: var(--bark-light); }
+  .card-meta .sep { color: rgba(122,114,101,0.3); }
+  .card-preview { font-size: 0.875rem; color: rgba(122,114,101,0.7); margin-top: 0.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chevron { width: 1.25rem; height: 1.25rem; color: rgba(122,114,101,0.4); flex-shrink: 0; margin-top: 0.25rem; }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="page">
+  <a href="#" class="back-link">
+    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+    Dashboard
+  </a>
+  <h1>Notes</h1>
+  <p class="subtitle">Your notes and saved vocabulary, grouped by lesson</p>
+
+  <div style="margin-top: 2rem;">
+    <!-- Group 1 -->
+    <a href="#" class="card">
+      <div class="card-inner">
+        <div style="min-width: 0; flex: 1;">
+          <div class="card-title">La vie dans les villes du futur</div>
+          <div class="card-meta">
+            <span>&#127467;&#127479; french</span>
+            <span class="sep">|</span>
+            <span>3 notes</span>
+          </div>
+          <p class="card-preview">The concept of "cohabiter" is interesting - it implies more than just coexisting, there's a sense of mutual...</p>
+        </div>
+        <svg class="chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+      </div>
+    </a>
+
+    <!-- Group 2 -->
+    <a href="#" class="card">
+      <div class="card-inner">
+        <div style="min-width: 0; flex: 1;">
+          <div class="card-title">El impacto de la inteligencia artificial en la educacion</div>
+          <div class="card-meta">
+            <span>&#127466;&#127480; spanish</span>
+            <span class="sep">|</span>
+            <span>5 notes</span>
+          </div>
+          <p class="card-preview">Remember: "aprendizaje automatico" = machine learning. The suffix "-aje" often maps to English "-ing" nouns...</p>
+        </div>
+        <svg class="chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+      </div>
+    </a>
+
+    <!-- Group 3 -->
+    <a href="#" class="card">
+      <div class="card-inner">
+        <div style="min-width: 0; flex: 1;">
+          <div class="card-title">Les changements climatiques et leurs consequences</div>
+          <div class="card-meta">
+            <span>&#127467;&#127479; french</span>
+            <span class="sep">|</span>
+            <span>1 note</span>
+          </div>
+          <p class="card-preview">Need to review the subjunctive mood usage in environmental context - "il faut que nous agissions"...</p>
+        </div>
+        <svg class="chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+      </div>
+    </a>
+
+    <!-- Group 4 -->
+    <a href="#" class="card">
+      <div class="card-inner">
+        <div style="min-width: 0; flex: 1;">
+          <div class="card-title">La gastronomia espanola: tradicion e innovacion</div>
+          <div class="card-meta">
+            <span>&#127466;&#127480; spanish</span>
+            <span class="sep">|</span>
+            <span>2 notes</span>
+          </div>
+          <p class="card-preview">Interesting distinction between "cocina" (cooking/kitchen) and "gastronomia" (broader food culture)...</p>
+        </div>
+        <svg class="chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+      </div>
+    </a>
+  </div>
+</div>
+</body>
+</html>
