@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
 import api from '../api/client';
+import { useAuth, AUTH_QUERY_KEY } from '../hooks/useAuth';
+import type { User } from '../types';
 
 const languages = [
   { value: 'spanish', label: 'Espanol', flag: '\u{1F1EA}\u{1F1F8}' },
@@ -9,14 +13,72 @@ const languages = [
   { value: 'korean', label: '\uD55C\uAD6D\uC5B4', flag: '\u{1F1F0}\u{1F1F7}' },
 ];
 
+const DIFFICULTIES = ['beginner', 'intermediate', 'advanced'] as const;
+type Difficulty = (typeof DIFFICULTIES)[number];
+
+const DIFFICULTY_STORAGE_KEY = 'difficulty';
+
+// Mirrors ArticleService's MIN/MAX_ARTICLE_LENGTH. The server still enforces
+// these — this only surfaces the limit before the user submits.
+const ARTICLE_MIN_LENGTH = 100;
+const ARTICLE_MAX_LENGTH = 10000;
+
+/** localStorage is user-editable, so validate before trusting it. An unknown
+ *  value would fail the backend's z.enum and 400 the create request. */
+function readStoredDifficulty(): Difficulty {
+  const stored = localStorage.getItem(DIFFICULTY_STORAGE_KEY);
+  return DIFFICULTIES.includes(stored as Difficulty)
+    ? (stored as Difficulty)
+    : 'intermediate';
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
   const [articleUrl, setArticleUrl] = useState('');
   const [articleText, setArticleText] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
-  const [language, setLanguage] = useState('spanish');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Derived rather than synced with useEffect, so the saved preference is
+  // correct on first paint instead of flashing a default and then correcting.
+  const [languageOverride, setLanguageOverride] = useState<string | null>(null);
+  const language = languageOverride ?? user?.preferred_language ?? 'spanish';
+
+  const [difficulty, setDifficulty] = useState<Difficulty>(readStoredDifficulty);
+
+  // Fire-and-forget: the picker updates immediately and never blocks on this.
+  const saveLanguage = useMutation({
+    mutationFn: (value: string) => api.put('/auth/language', { language: value }),
+    onSuccess: (_data, value) => {
+      queryClient.setQueryData<User>(AUTH_QUERY_KEY, (prev) =>
+        prev ? { ...prev, preferred_language: value } : prev,
+      );
+    },
+  });
+
+  const handleLanguageChange = (value: string) => {
+    setLanguageOverride(value);
+    saveLanguage.mutate(value);
+  };
+
+  const handleDifficultyChange = (value: Difficulty) => {
+    setDifficulty(value);
+    localStorage.setItem(DIFFICULTY_STORAGE_KEY, value);
+  };
+
+  const trimmedText = articleText.trim();
+  const articleLengthError =
+    trimmedText.length === 0
+      ? null
+      : trimmedText.length < ARTICLE_MIN_LENGTH
+        ? `at least ${ARTICLE_MIN_LENGTH} needed`
+        : trimmedText.length > ARTICLE_MAX_LENGTH
+          ? 'too long'
+          : null;
 
   const canSubmit = (articleUrl.trim() || articleText.trim()) && !loading;
 
@@ -29,12 +91,21 @@ export default function Dashboard() {
         articleUrl: articleUrl.trim() || undefined,
         articleText: articleText.trim() || undefined,
         language,
-        difficulty: 'intermediate',
+        difficulty,
       });
       const lesson = data.data?.lesson ?? data.lesson ?? data;
-      navigate(`/lessons/${lesson.id}`);
-    } catch {
-      setError('Something went wrong. Please try again.');
+      // Carried in router state rather than persisted: it describes this
+      // creation, not the lesson itself.
+      navigate(`/lessons/${lesson.id}`, {
+        state: { articleTruncated: data.data?.articleTruncated ?? false },
+      });
+    } catch (err) {
+      // The API returns actionable messages ("Article too long. Maximum 10000
+      // characters allowed."). Show them instead of a generic failure.
+      const serverMessage = axios.isAxiosError(err)
+        ? (err.response?.data as { error?: string } | undefined)?.error
+        : undefined;
+      setError(serverMessage ?? 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -179,13 +250,26 @@ export default function Dashboard() {
 
           {/* Expandable textarea */}
           {showTextInput && (
-            <textarea
-              placeholder="Paste your article text here..."
-              value={articleText}
-              onChange={(e) => setArticleText(e.target.value)}
-              rows={5}
-              className="w-full px-4 py-4 bg-white rounded-2xl border border-sand text-bark placeholder:text-bark-light/40 focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage/50 shadow-sm hover:shadow-md transition-all duration-200 resize-none"
-            />
+            <div>
+              <textarea
+                placeholder="Paste your article text here..."
+                value={articleText}
+                onChange={(e) => setArticleText(e.target.value)}
+                rows={5}
+                className="w-full px-4 py-4 bg-white rounded-2xl border border-sand text-bark placeholder:text-bark-light/40 focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage/50 shadow-sm hover:shadow-md transition-all duration-200 resize-none"
+              />
+              {articleText.trim().length > 0 && (
+                <p
+                  className={`mt-1.5 text-xs text-right ${
+                    articleLengthError ? 'text-terracotta' : 'text-bark-light/50'
+                  }`}
+                >
+                  {articleText.trim().length.toLocaleString()} /{' '}
+                  {ARTICLE_MAX_LENGTH.toLocaleString()} characters
+                  {articleLengthError ? ` — ${articleLengthError}` : ''}
+                </p>
+              )}
+            </div>
           )}
 
           {/* Generate button */}
@@ -229,7 +313,7 @@ export default function Dashboard() {
             {languages.map((lang) => (
               <button
                 key={lang.value}
-                onClick={() => setLanguage(lang.value)}
+                onClick={() => handleLanguageChange(lang.value)}
                 className={`px-4 py-2.5 rounded-full text-sm font-medium transition-all duration-200 cursor-pointer ${
                   language === lang.value
                     ? 'bg-sage text-white shadow-sm'
@@ -238,6 +322,28 @@ export default function Dashboard() {
               >
                 <span className="mr-1.5">{lang.flag}</span>
                 {lang.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Difficulty selector */}
+        <div className="mt-8 flex flex-col items-center gap-3">
+          <span className="text-sm text-bark-light/60 font-medium tracking-wide uppercase">
+            Level
+          </span>
+          <div className="flex flex-wrap justify-center gap-2">
+            {DIFFICULTIES.map((level) => (
+              <button
+                key={level}
+                onClick={() => handleDifficultyChange(level)}
+                className={`px-4 py-2.5 rounded-full text-sm font-medium capitalize transition-all duration-200 cursor-pointer ${
+                  difficulty === level
+                    ? 'bg-sage text-white shadow-sm'
+                    : 'bg-cream-dark text-bark-light hover:bg-sand'
+                }`}
+              >
+                {level}
               </button>
             ))}
           </div>

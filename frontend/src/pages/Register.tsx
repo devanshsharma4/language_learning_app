@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import api from '../api/client';
+import { AUTH_QUERY_KEY } from '../hooks/useAuth';
 
 export default function Register() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -14,7 +17,10 @@ export default function Register() {
     try {
       const { data } = await api.post('/auth/register', { email, password });
       localStorage.setItem('token', data.data?.token ?? data.token);
-      navigate('/dashboard');
+      // Same reason as Login: clear the pre-signup cache entry before the
+      // guard reads it. New accounts always land on the dashboard.
+      await queryClient.invalidateQueries({ queryKey: AUTH_QUERY_KEY });
+      navigate('/dashboard', { replace: true });
     } catch {
       setError('Registration failed. Email may already be in use.');
     }

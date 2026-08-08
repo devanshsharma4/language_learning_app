@@ -20,10 +20,18 @@ function escapeRegex(str: string) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * Splits one paragraph into plain and highlightable segments.
+ *
+ * `highlighted` is shared across every paragraph in the article and carries the
+ * words already marked, so a term that recurs is highlighted only on its first
+ * appearance. Callers must pass the same set for all paragraphs, in order.
+ */
 function buildSegments(
   text: string,
   vocabulary: VocabularyItem[],
   language: string,
+  highlighted: Set<string>,
 ): Segment[] {
   if (vocabulary.length === 0) return [{ text, vocab: null, key: '0' }];
 
@@ -57,11 +65,17 @@ function buildSegments(
       });
     }
     const matched = match[0];
-    segments.push({
-      text: matched,
-      vocab: vocabMap.get(matched.toLowerCase()) ?? null,
-      key: `vocab-${idx++}`,
-    });
+    const normalized = matched.toLowerCase();
+    const vocab = vocabMap.get(normalized) ?? null;
+
+    if (vocab && !highlighted.has(normalized)) {
+      highlighted.add(normalized);
+      segments.push({ text: matched, vocab, key: `vocab-${idx++}` });
+    } else {
+      // A repeat occurrence (or an unknown match) renders as ordinary text.
+      segments.push({ text: matched, vocab: null, key: `plain-${idx++}` });
+    }
+
     lastIndex = matchStart + matched.length;
   }
 
@@ -90,8 +104,12 @@ export default function ArticleSection({
   }, [articleText]);
 
   const paragraphSegments = useMemo(() => {
+    // Shared across paragraphs so each vocabulary word is highlighted once,
+    // on its first appearance in the article.
+    const highlighted = new Set<string>();
+
     return paragraphs.map((p, pIdx) =>
-      buildSegments(p, vocabulary, language).map((seg) => ({
+      buildSegments(p, vocabulary, language, highlighted).map((seg) => ({
         ...seg,
         key: `p${pIdx}-${seg.key}`,
       })),

@@ -18,15 +18,18 @@
   "license": "ISC",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@mozilla/readability": "^0.6.0",
     "@types/bcrypt": "^6.0.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/jsdom": "^21.1.7",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/pg": "^8.18.0",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "jsdom": "^26.1.0",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.20.0",
     "zod": "^4.3.6"

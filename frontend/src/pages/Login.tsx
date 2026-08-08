@@ -1,12 +1,19 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import api from '../api/client';
+import { AUTH_QUERY_KEY } from '../hooks/useAuth';
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+
+  // Set by RequireAuth when it turns away an unauthenticated visitor.
+  const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -14,7 +21,10 @@ export default function Login() {
     try {
       const { data } = await api.post('/auth/login', { email, password });
       localStorage.setItem('token', data.data?.token ?? data.token);
-      navigate('/dashboard');
+      // Drop the pre-login cache entry; otherwise the guard reads a stale
+      // failure and bounces the user straight back here.
+      await queryClient.invalidateQueries({ queryKey: AUTH_QUERY_KEY });
+      navigate(from ?? '/dashboard', { replace: true });
     } catch {
       setError('Invalid email or password.');
     }

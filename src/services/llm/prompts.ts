@@ -1,13 +1,45 @@
+/** Hard bounds on extracted vocabulary, independent of article length. */
+export const VOCAB_MIN = 6;
+export const VOCAB_MAX = 20;
+
+/** Roughly one vocabulary word per this many words of article text. */
+const WORDS_PER_VOCAB_ITEM = 90;
+
+/** Beginners get a lighter load at the same article length; advanced a denser one. */
+const DIFFICULTY_WEIGHT: Record<string, number> = {
+  beginner: 0.8,
+  intermediate: 1.0,
+  advanced: 1.2,
+};
+
+/**
+ * How many vocabulary words to request for a given article.
+ *
+ * A fixed count over-saturates a short article and leaves a long one sparse, so
+ * this scales with length, then clamps so the result stays usable at either
+ * extreme. The model is asked for this many; `lessonService` enforces the
+ * ceiling, since models treat counts as suggestions.
+ */
+export function vocabularyTarget(text: string, difficulty: string): number {
+  const wordCount = text.trim().split(/\s+/).length;
+  const weight = DIFFICULTY_WEIGHT[difficulty] ?? 1.0;
+  const scaled = Math.round((wordCount / WORDS_PER_VOCAB_ITEM) * weight);
+
+  return Math.min(VOCAB_MAX, Math.max(VOCAB_MIN, scaled));
+}
+
 export const promptTemplates = {
   vocabularyExtraction: (text: string, language: string, difficulty: string) => `
     You are a language learning assistant. Extract key vocabulary words from the following ${language} text for a ${difficulty} level learner.
 
     Text: "${text}"
 
-    Select 10-15 important vocabulary words that are appropriate for a ${difficulty} learner. Focus on:
+    Select exactly ${vocabularyTarget(text, difficulty)} important vocabulary words that are appropriate for a ${difficulty} learner. Focus on:
     - Words that are essential for understanding the main ideas
     - Words that appear multiple times
     - Words that are slightly above the learner's current level (for growth)
+    - Each entry must be a DISTINCT word. Never repeat a word, and do not include
+      two forms of the same lemma (e.g. both "oiseau" and "oiseaux").
 
     For each word, provide:
     - word: The word as it appears in the text

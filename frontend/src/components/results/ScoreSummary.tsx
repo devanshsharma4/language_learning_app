@@ -1,4 +1,4 @@
-import type { MCQResult, Feedback } from '../../types';
+import type { Feedback } from '../../types';
 
 interface ScoreSummaryProps {
   feedback: Feedback;

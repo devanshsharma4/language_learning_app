@@ -23,6 +23,7 @@ Full-stack: an Express + TypeScript API at the repo root and a React + Vite SPA 
 - Node.js 20+ with TypeScript, Express 5
 - PostgreSQL via `pg` — raw SQL, no ORM
 - `@anthropic-ai/sdk` for all LLM calls
+- `@mozilla/readability` + `jsdom` (pinned to v26 — v27+ is ESM-only) for article extraction
 - JWT + bcrypt for auth, `zod` for validation
 
 **Frontend** (`frontend/`)
@@ -231,21 +232,17 @@ The frontend requires no environment variables — Vite proxies `/api` in develo
 
 ## Known Gaps
 
-See the **To Implement** section of `CLAUDE.md` for the tracked list. In brief:
-
-- No route guard on the frontend — protected pages render for logged-out users until an
-  API call 401s.
-- Language preference is never persisted (`PUT /api/auth/language` is unused).
-- Difficulty is hardcoded to `intermediate` on the Dashboard; the only selector lives in
-  the unreachable, broken `NewLesson.tsx`.
-- `LessonView.tsx` still contains mock lesson data behind a `/lessons/demo` route.
+- No caching or rate limiting on the AI pipeline — each lesson is four uncached Claude calls
+  behind an unthrottled endpoint, with no retry or fallback on malformed model output.
+- No test suite; `npm test` is a stub. `./test-api.sh` covers the API path manually.
+- Frontend types are hand-mirrored from the backend with nothing enforcing agreement.
+- `/lessons/demo` renders a sample lesson but cannot be submitted (`parseInt('demo')` → `NaN`).
 
 ## Next Steps
 
-1. Close the gaps above
-2. Implement a caching layer for LLM responses
-3. Add rate limiting to `POST /api/lessons/create`
-4. Add retry / graceful degradation for LLM failures
-5. Add a test suite (`npm test` is currently a stub)
-6. Set up monitoring and error tracking
-7. Deploy to production (Railway/Render recommended)
+1. Implement a caching layer for LLM responses
+2. Add rate limiting to `POST /api/lessons/create`
+3. Add retry / graceful degradation for LLM failures
+4. Add a test suite (`npm test` is currently a stub)
+5. Set up monitoring and error tracking
+6. Deploy to production (Railway/Render recommended)

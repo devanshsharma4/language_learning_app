@@ -1,5 +1,6 @@
 import { query, transaction } from '../../config/database';
 import { llmService } from '../llm/llmService';
+import { vocabularyTarget } from '../llm/prompts';
 import { articleService } from '../article/articleService';
 import { AppError } from '../../middleware/errorHandler';
 import {
@@ -8,7 +9,8 @@ import {
   LessonQuestion,
   MCQResult,
   MCQAnswer,
-  ShortAnswerResponse
+  ShortAnswerResponse,
+  VocabularyItem
 } from '../../types/models';
 
 export class LessonService {
@@ -17,10 +19,14 @@ export class LessonService {
     language: string,
     difficulty: string,
     articleInput: { text?: string; url?: string }
-  ): Promise<Lesson> {
+  ): Promise<{ lesson: Lesson; articleTruncated: boolean }> {
     let articleText: string;
     let articleTitle: string | undefined;
     let articleUrl: string | undefined;
+    // Reported back to the caller so the UI can say the lesson covers only
+    // part of a long article. Deliberately not persisted — it describes this
+    // creation, and storing it would need a schema change.
+    let articleTruncated = false;
 
     // Extract article content
     if (articleInput.url) {
@@ -28,6 +34,7 @@ export class LessonService {
       articleText = extracted.text;
       articleTitle = extracted.title;
       articleUrl = articleInput.url;
+      articleTruncated = extracted.truncated;
     } else if (articleInput.text) {
       articleText = articleInput.text;
       articleService.validateArticle(articleText);
@@ -42,9 +49,17 @@ export class LessonService {
       llmService.generateWritingPrompts(articleText, language, difficulty)
     ]);
 
+    // The prompt asks for a specific count, but models treat counts as
+    // suggestions and sometimes repeat a word. Enforce both here so the stored
+    // lesson is guaranteed to satisfy the quota.
+    const vocabulary = this.normalizeVocabulary(
+      vocabularyResult.vocabulary,
+      vocabularyTarget(articleText, difficulty)
+    );
+
     // Step 2: Generate vocab MCQs (needs vocabulary output from step 1)
     const vocabQuestionsResult = await llmService.generateVocabQuestions(
-      vocabularyResult.vocabulary,
+      vocabulary,
       language,
       difficulty
     );
@@ -80,7 +95,7 @@ export class LessonService {
           articleTitle,
           articleText,
           articleUrl,
-          JSON.stringify(vocabularyResult.vocabulary),
+          JSON.stringify(vocabulary),
           JSON.stringify(allQuestions),
           JSON.stringify(promptsResult.prompts)
         ]
@@ -89,7 +104,7 @@ export class LessonService {
       return result.rows[0];
     });
 
-    return this.formatLesson(lesson);
+    return { lesson: this.formatLesson(lesson), articleTruncated };
   }
 
   async getLesson(lessonId: number, userId: number): Promise<Lesson | null> {
@@ -282,6 +297,31 @@ export class LessonService {
     }
 
     return this.formatLessonResponse(responses[0]);
+  }
+
+  /**
+   * Drops duplicate words (case-insensitive) and trims to `target`.
+   *
+   * Duplicates matter beyond tidiness: the article highlighter keys on the
+   * word, so a repeated entry produces a vocabulary MCQ testing the same term
+   * twice.
+   */
+  private normalizeVocabulary(
+    items: VocabularyItem[],
+    target: number
+  ): VocabularyItem[] {
+    const seen = new Set<string>();
+    const unique: VocabularyItem[] = [];
+
+    for (const item of items) {
+      const key = item.word?.trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+
+      seen.add(key);
+      unique.push(item);
+    }
+
+    return unique.slice(0, target);
   }
 
   private formatLesson(row: any): Lesson {

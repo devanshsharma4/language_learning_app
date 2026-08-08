@@ -17,7 +17,14 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
-      window.location.href = '/login';
+
+      // /auth/me is the token check RequireAuth performs on mount. Let the
+      // guard redirect through the router so the target route is preserved and
+      // in-flight page state survives; a hard reload here would discard both.
+      const isAuthCheck = error.config?.url?.includes('/auth/me');
+      if (!isAuthCheck) {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   },

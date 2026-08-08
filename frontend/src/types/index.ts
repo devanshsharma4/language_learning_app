@@ -1,7 +1,10 @@
 export interface User {
   id: string;
   email: string;
-  preferred_language: string;
+  name?: string;
+  // Nullable in the database and never set at registration, so every new
+  // account starts without one. Callers must supply a fallback.
+  preferred_language?: string;
 }
 
 export interface Lesson {

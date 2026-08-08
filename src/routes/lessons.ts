@@ -45,7 +45,7 @@ router.post('/create', authenticate, async (req: AuthRequest, res, next) => {
 
     const { language, difficulty, articleText, articleUrl } = validation.data;
 
-    const lesson = await lessonService.createLesson(
+    const { lesson, articleTruncated } = await lessonService.createLesson(
       req.user.userId,
       language,
       difficulty,
@@ -54,7 +54,7 @@ router.post('/create', authenticate, async (req: AuthRequest, res, next) => {
 
     res.status(201).json({
       status: 'success',
-      data: { lesson }
+      data: { lesson, articleTruncated }
     });
   } catch (error) {
     next(error);
