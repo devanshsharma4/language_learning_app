@@ -2,6 +2,7 @@ import { useReducer, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import api from '../api/client';
+import { useDebounce } from '../hooks/useDebounce';
 import type { Lesson, LessonResponse } from '../types';
 import { MOCK_LESSON } from '../fixtures/mockLesson';
 import LessonHeader from '../components/lesson/LessonHeader';
@@ -49,6 +50,63 @@ function formReducer(state: FormState, action: Action): FormState {
   }
 }
 
+const DRAFT_KEY_PREFIX = 'lesson-draft-';
+
+const EMPTY_FORM: FormState = {
+  mcqAnswers: {},
+  shortAnswers: {},
+  writingResponses: {},
+};
+
+const draftKey = (lessonId: string) => `${DRAFT_KEY_PREFIX}${lessonId}`;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isFormEmpty(state: FormState) {
+  return (
+    Object.keys(state.mcqAnswers).length === 0 &&
+    Object.keys(state.shortAnswers).length === 0 &&
+    Object.keys(state.writingResponses).length === 0
+  );
+}
+
+/**
+ * Restores in-progress answers so a refresh or a stray back-navigation doesn't
+ * discard them.
+ *
+ * localStorage is user-editable and a malformed draft must never be able to
+ * crash the lesson page, so anything that isn't the exact shape we wrote is
+ * dropped in favour of a blank form.
+ */
+function loadDraft(lessonId: string | undefined): FormState {
+  if (!lessonId) return EMPTY_FORM;
+
+  try {
+    const raw = localStorage.getItem(draftKey(lessonId));
+    if (!raw) return EMPTY_FORM;
+
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      !isRecord(parsed) ||
+      !isRecord(parsed.mcqAnswers) ||
+      !isRecord(parsed.shortAnswers) ||
+      !isRecord(parsed.writingResponses)
+    ) {
+      return EMPTY_FORM;
+    }
+
+    return {
+      mcqAnswers: parsed.mcqAnswers as FormState['mcqAnswers'],
+      shortAnswers: parsed.shortAnswers as FormState['shortAnswers'],
+      writingResponses: parsed.writingResponses as FormState['writingResponses'],
+    };
+  } catch {
+    return EMPTY_FORM;
+  }
+}
+
 export default function LessonView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -59,11 +117,20 @@ export default function LessonView() {
     (location.state as { articleTruncated?: boolean } | null)?.articleTruncated,
   );
 
-  const [formState, dispatch] = useReducer(formReducer, {
-    mcqAnswers: {},
-    shortAnswers: {},
-    writingResponses: {},
-  });
+  // Lazy init, so a restored draft is present on the first render with no flicker.
+  const [formState, dispatch] = useReducer(formReducer, id, loadDraft);
+
+  // Persist on a debounce rather than every keystroke.
+  const debouncedForm = useDebounce(formState, 500);
+
+  useEffect(() => {
+    if (!id) return;
+    if (isFormEmpty(debouncedForm)) {
+      localStorage.removeItem(draftKey(id));
+    } else {
+      localStorage.setItem(draftKey(id), JSON.stringify(debouncedForm));
+    }
+  }, [debouncedForm, id]);
 
   const isDemo = id === 'demo';
 
@@ -89,6 +156,8 @@ export default function LessonView() {
   // Redirect to results if lesson already has a submitted response with feedback
   useEffect(() => {
     if (fetchedData?.response?.ai_feedback && id) {
+      // Already submitted elsewhere — any local draft is stale.
+      localStorage.removeItem(draftKey(id));
       navigate(`/lessons/${id}/results`, {
         replace: true,
         state: { lesson: fetchedData.lesson, response: fetchedData.response },
@@ -117,6 +186,7 @@ export default function LessonView() {
     },
     onSuccess: (data) => {
       const response: LessonResponse = data.data?.response ?? data.response ?? data;
+      if (id) localStorage.removeItem(draftKey(id));
       navigate(`/lessons/${id}/results`, {
         state: { lesson, response },
       });

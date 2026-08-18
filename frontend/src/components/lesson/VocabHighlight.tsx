@@ -7,6 +7,7 @@ interface VocabHighlightProps {
   vocab: VocabularyItem;
   language: string;
   lessonId?: string;
+  alreadySaved?: boolean;
   isActive: boolean;
   onToggle: () => void;
   onClose: () => void;
@@ -17,6 +18,7 @@ export default function VocabHighlight({
   vocab,
   language,
   lessonId,
+  alreadySaved,
   isActive,
   onToggle,
   onClose,
@@ -38,6 +40,7 @@ export default function VocabHighlight({
           vocab={vocab}
           language={language}
           lessonId={lessonId}
+          alreadySaved={alreadySaved}
           anchorRef={buttonRef}
           onClose={onClose}
         />

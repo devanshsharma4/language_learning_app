@@ -1,5 +1,7 @@
-import { useEffect, useRef, useLayoutEffect, useState } from 'react';
+import { useEffect, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { Link } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { VocabularyItem } from '../../types';
 import api from '../../api/client';
 
@@ -7,13 +9,21 @@ interface VocabPopoverProps {
   vocab: VocabularyItem;
   language: string;
   lessonId?: string;
+  alreadySaved?: boolean;
   anchorRef: React.RefObject<HTMLElement | null>;
   onClose: () => void;
 }
 
-export default function VocabPopover({ vocab, language, lessonId, anchorRef, onClose }: VocabPopoverProps) {
+export default function VocabPopover({
+  vocab,
+  language,
+  lessonId,
+  alreadySaved = false,
+  anchorRef,
+  onClose,
+}: VocabPopoverProps) {
   const popoverRef = useRef<HTMLDivElement>(null);
-  const [saved, setSaved] = useState(false);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -67,21 +77,29 @@ export default function VocabPopover({ vocab, language, lessonId, anchorRef, onC
     popover.style.left = `${left}px`;
   });
 
-  const handleSave = async () => {
-    try {
+  const save = useMutation({
+    mutationFn: async () => {
+      // `lessonId` is a route param, and on /lessons/demo it is not a number at
+      // all. JSON has no NaN — it serializes to null, which the route's
+      // `z.number().optional()` rejects with a 400 — so omit the key instead.
+      const numericLessonId = Number(lessonId);
+
       await api.post('/vocabulary/save', {
         word: vocab.word,
         translation: vocab.translation,
         explanation: vocab.explanation,
         context: vocab.context || vocab.example || '',
         language,
-        lessonId: lessonId ? Number(lessonId) : undefined,
+        lessonId: Number.isFinite(numericLessonId) ? numericLessonId : undefined,
       });
-      setSaved(true);
-    } catch {
-      // silently fail for MVP
-    }
-  };
+    },
+    onSuccess: () => {
+      // Prefix match: refreshes the collection page and any other open lesson.
+      queryClient.invalidateQueries({ queryKey: ['vocabulary'] });
+    },
+  });
+
+  const saved = alreadySaved || save.isSuccess;
 
   // Portal to document.body so the popover isn't clipped by the <p> tag,
   // but it still visually appears right next to the clicked word
@@ -115,26 +133,41 @@ export default function VocabPopover({ vocab, language, lessonId, anchorRef, onC
         </p>
       )}
 
-      <button
-        onClick={handleSave}
-        disabled={saved}
-        className={`mt-3 text-xs transition-colors duration-200 ${
-          saved
-            ? 'text-sage-dark/60 cursor-default'
-            : 'text-sage-dark hover:text-olive cursor-pointer'
-        }`}
-      >
-        {saved ? (
-          <span className="flex items-center gap-1">
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-            Saved
-          </span>
-        ) : (
-          '+ Save to vocabulary'
-        )}
-      </button>
+      {saved ? (
+        <div className="mt-3 flex items-center gap-1.5 text-xs text-sage-dark/60">
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+          Saved
+          <span className="text-bark-light/30">·</span>
+          {/* New tab on purpose: navigating away would unmount the lesson and
+              lose any answers typed so far. */}
+          <Link
+            to="/vocabulary"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sage-dark hover:text-olive transition-colors duration-200"
+          >
+            View collection
+          </Link>
+        </div>
+      ) : (
+        <button
+          onClick={() => save.mutate()}
+          disabled={save.isPending}
+          className={`mt-3 text-xs transition-colors duration-200 cursor-pointer ${
+            save.isError
+              ? 'text-terracotta hover:text-terracotta/80'
+              : 'text-sage-dark hover:text-olive'
+          } disabled:cursor-default disabled:text-sage-dark/60`}
+        >
+          {save.isPending
+            ? 'Saving…'
+            : save.isError
+              ? "Couldn't save — retry"
+              : '+ Save to vocabulary'}
+        </button>
+      )}
     </div>,
     document.body,
   );

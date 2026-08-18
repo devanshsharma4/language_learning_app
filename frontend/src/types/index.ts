@@ -109,12 +109,17 @@ export interface LessonResponse {
 }
 
 export interface SavedVocabulary {
-  id: string;
-  user_id: string;
+  // SERIAL / INTEGER columns — these arrive as JSON numbers, not strings.
+  id: number;
+  user_id: number;
+  lesson_id?: number | null;
   word: string;
-  translation: string;
-  explanation: string;
-  context: string;
+  // Nullable in the database — only `word` and `language` are NOT NULL.
+  translation?: string | null;
+  explanation?: string | null;
+  context?: string | null;
+  language: string;
+  created_at: string;
 }
 
 export interface LessonSummary {

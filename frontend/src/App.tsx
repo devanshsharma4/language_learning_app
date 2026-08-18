@@ -10,6 +10,7 @@ import LessonView from './pages/LessonView';
 import LessonResults from './pages/LessonResults';
 import LessonHistory from './pages/LessonHistory';
 import NotesOverview from './pages/NotesOverview';
+import SavedVocabularyPage from './pages/SavedVocabularyPage';
 
 const queryClient = new QueryClient();
 
@@ -75,6 +76,14 @@ export default function App() {
             element={
               <RequireAuth>
                 <NotesOverview />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/vocabulary"
+            element={
+              <RequireAuth>
+                <SavedVocabularyPage />
               </RequireAuth>
             }
           />

@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import type { VocabularyItem } from '../../types';
+import { useSavedWords } from '../../hooks/useSavedWords';
 import VocabHighlight from './VocabHighlight';
 
 interface ArticleSectionProps {
@@ -99,6 +100,10 @@ export default function ArticleSection({
 }: ArticleSectionProps) {
   const [activeWord, setActiveWord] = useState<string | null>(null);
 
+  // So a word saved in an earlier session opens showing "Saved" rather than
+  // offering to save it again.
+  const savedWords = useSavedWords(language);
+
   const paragraphs = useMemo(() => {
     return articleText.split(/\n\n|\n/).filter((p) => p.trim());
   }, [articleText]);
@@ -138,6 +143,7 @@ export default function ArticleSection({
                   vocab={seg.vocab}
                   language={language}
                   lessonId={lessonId}
+                  alreadySaved={savedWords.has(seg.vocab.word.toLowerCase())}
                   isActive={activeWord === seg.key}
                   onToggle={() =>
                     setActiveWord(activeWord === seg.key ? null : seg.key)

@@ -169,6 +169,12 @@ export default function Dashboard() {
             My Lessons
           </Link>
           <Link
+            to="/vocabulary"
+            className="px-4 py-2 rounded-full text-sm font-medium text-bark-light hover:bg-cream-dark transition-colors duration-200"
+          >
+            Vocabulary
+          </Link>
+          <Link
             to="/notes"
             className="px-4 py-2 rounded-full text-sm font-medium text-bark-light hover:bg-cream-dark transition-colors duration-200"
           >

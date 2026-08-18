@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useLocation, Link } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import api from '../api/client';
+import { useDebounce } from '../hooks/useDebounce';
 import type { Lesson, LessonResponse, Note, SavedVocabulary } from '../types';
 import ScoreSummary from '../components/results/ScoreSummary';
 import MCQResults from '../components/results/MCQResults';
@@ -20,15 +21,6 @@ interface NotesData {
   notes?: Note[];
   vocabulary: SavedVocabulary[];
   lesson: { id: number; article_title?: string; language: string; difficulty: string };
-}
-
-function useDebounce<T>(value: T, delay: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(timer);
-  }, [value, delay]);
-  return debounced;
 }
 
 export default function LessonResults() {
