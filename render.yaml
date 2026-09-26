@@ -9,7 +9,7 @@
 
 services:
   - type: web
-    name: lingua-api
+    name: articulo-api
     runtime: node
     plan: free
     region: oregon
@@ -23,7 +23,7 @@ services:
         value: production
       - key: DATABASE_URL
         fromDatabase:
-          name: lingua-db
+          name: articulo-db
           property: connectionString
       # Generated once by Render and never checked in. Changing it invalidates
       # every issued token, signing all users out.
@@ -39,7 +39,7 @@ services:
         sync: false
 
 databases:
-  - name: lingua-db
+  - name: articulo-db
     plan: free
     region: oregon
     # Render's free Postgres is deleted after 30 days. Everything here is

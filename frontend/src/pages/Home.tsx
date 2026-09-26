@@ -33,26 +33,40 @@ export default function Home() {
         </div>
 
         <h1 className="font-display text-5xl md:text-6xl font-semibold text-bark tracking-tight mb-4">
-          Language Lessons
+          Articulo
         </h1>
-        <p className="text-bark-light text-lg max-w-md mx-auto mb-12">
-          Turn any article into an interactive language lesson with AI-powered feedback.
+        <p className="text-bark-light text-lg max-w-md mx-auto mb-4">
+          Learn languages from real articles.
+        </p>
+        <p className="text-bark-light/80 text-base max-w-lg mx-auto mb-12">
+          Paste something you actually want to read. Get the vocabulary, questions to check
+          you understood it, and feedback on what you write back.
         </p>
 
-        <div className="flex items-center justify-center gap-4">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          {/* Primary action for a first-time visitor is to see the product, not
+              to create an account. The demo needs no signup and is graded in the
+              browser, so it costs nothing to offer. */}
           <Link
-            to="/login"
-            className="px-8 py-3.5 bg-sage hover:bg-sage-dark active:bg-olive text-white font-semibold rounded-2xl shadow-md hover:shadow-lg transition-all duration-200 text-lg"
+            to="/lessons/demo"
+            className="w-full sm:w-auto px-8 py-3.5 bg-sage hover:bg-sage-dark active:bg-olive text-white font-semibold rounded-2xl shadow-md hover:shadow-lg transition-all duration-200 text-lg"
           >
-            Log In
+            Try a lesson
           </Link>
           <Link
             to="/register"
-            className="px-8 py-3.5 border border-sand hover:border-sage/40 text-bark font-semibold rounded-2xl hover:bg-white hover:shadow-sm transition-all duration-200 text-lg"
+            className="w-full sm:w-auto px-8 py-3.5 border border-sand hover:border-sage/40 text-bark font-semibold rounded-2xl hover:bg-white hover:shadow-sm transition-all duration-200 text-lg"
           >
             Sign Up
           </Link>
         </div>
+
+        <p className="mt-6 text-sm text-bark-light/80">
+          No signup needed for the demo ·{' '}
+          <Link to="/login" className="text-sage-dark hover:text-olive underline-offset-4 hover:underline">
+            Log in
+          </Link>
+        </p>
       </div>
     </div>
   );
