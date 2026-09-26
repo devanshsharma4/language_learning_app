@@ -28,6 +28,34 @@ export function vocabularyTarget(text: string, difficulty: string): number {
   return Math.min(VOCAB_MAX, Math.max(VOCAB_MIN, scaled));
 }
 
+/**
+ * What language *questions* are written in, as opposed to the article's language.
+ *
+ * This used to be unspecified, so the model decided freshly on every call: a
+ * single beginner Korean lesson came back with Korean comprehension questions and
+ * English vocabulary questions. Whichever behaviour you want, it has to be stated.
+ *
+ * The choice: beginners get questions in English, because someone who cannot yet
+ * read the language cannot read a question written in it either -- the question
+ * would test decoding rather than comprehension. Intermediate and advanced
+ * learners get questions in the target language, which is the harder and more
+ * useful exercise.
+ *
+ * Writing prompts are deliberately excluded: reading the prompt in the target
+ * language is part of that task at every level. See `writingPromptGeneration`.
+ */
+export function questionLanguage(language: string, difficulty: string): string {
+  return difficulty === 'beginner' ? 'English' : language;
+}
+
+function questionLanguageRule(language: string, difficulty: string): string {
+  const target = questionLanguage(language, difficulty);
+
+  return target === 'English'
+    ? `LANGUAGE REQUIREMENT (strict): Write every question and every answer option in ENGLISH, even though the text is in ${language}. This learner is a beginner and cannot yet read ${language} fluently. Only quoted words or phrases taken directly from the text may appear in ${language}.`
+    : `LANGUAGE REQUIREMENT (strict): Write every question and every answer option in ${language}, not in English. This learner reads ${language} at a ${difficulty} level.`;
+}
+
 export const promptTemplates = {
   vocabularyExtraction: (text: string, language: string, difficulty: string) => `
     You are a language learning assistant. Extract key vocabulary words from the following ${language} text for a ${difficulty} level learner.
@@ -48,8 +76,13 @@ export const promptTemplates = {
     - explanation: Brief explanation in simple English (max 20 words)
     - example: A simple example sentence using this word (optional)
 
+    Also provide a "title" for this text: a short descriptive headline of at most
+    8 words, written in ENGLISH, describing what the text is about. This is used
+    to label the lesson in the learner's history.
+
     Return a JSON object with structure:
     {
+      "title": "string",
       "vocabulary": [
         {
           "word": "string",
@@ -71,6 +104,8 @@ export const promptTemplates = {
 
       Text: "${text}"
 
+      ${questionLanguageRule(language, difficulty)}
+
       Generate TWO types of questions:
 
       1. READING COMPREHENSION (Multiple Choice) - ${rcCount} questions
@@ -82,7 +117,8 @@ export const promptTemplates = {
          - Use IDs: "rc1", "rc2", etc.
 
       2. SHORT ANSWER - ${saCount} question(s)
-         - Open-ended questions requiring a written response in ${language}
+         - Ask the question in ${questionLanguage(language, difficulty)}, but the learner
+           writes their answer in ${language}. State that in the question if unclear.
          - Test deeper comprehension, analysis, or personal reflection on the text
          - Appropriate for ${difficulty} level
          - Include guidance on what a good answer should cover
@@ -125,9 +161,13 @@ export const promptTemplates = {
       Vocabulary words:
       ${wordList}
 
+      ${questionLanguageRule(language, difficulty)}
+
       Select ${count} words from the list above and create one question per word. For each question:
       - Ask what the word means in context, or present a sentence with a blank for the word
       - Provide exactly 4 options
+      - Do NOT name the word being tested in the question text itself unless the question
+        is a fill-in-the-blank; the "word" field records it separately
       - Make distractor options plausible (related words, similar meanings, common confusions)
       - Only one option should be correct
       - Use IDs: "vq1", "vq2", etc.
@@ -160,13 +200,19 @@ export const promptTemplates = {
 
       Text: "${text}"
 
+      LANGUAGE REQUIREMENT (strict): Write the prompt itself in ${language}, at every
+      difficulty level including beginner, and the learner responds in ${language}.
+      Reading the prompt is part of this exercise -- unlike the comprehension and
+      vocabulary questions, which are in English for beginners. Keep the wording
+      simple enough for a ${difficulty} learner to parse.
+
       Create prompts that:
       - Relate directly to the article's topic
       - Encourage use of vocabulary from the text
       - Are achievable for ${difficulty} learners
       - Progress in difficulty if multiple prompts
 
-      Word count expectations:
+      Word count expectations (include BOTH minWords and maxWords on every prompt):
       - Minimum: ${wordCounts[difficulty as keyof typeof wordCounts].min} words
       - Maximum: ${wordCounts[difficulty as keyof typeof wordCounts].max} words
 
@@ -217,7 +263,7 @@ export const promptTemplates = {
     }).join('\n')}
 
     Provide constructive feedback that:
-    - Evaluates each short answer for comprehension accuracy (score 0-100)
+    - Evaluates each short answer for comprehension accuracy (score 0-10)
     - Identifies grammar errors with corrections and explanations
     - Suggests better vocabulary choices where appropriate
     - Assesses writing quality with specific strengths and areas for improvement
@@ -229,14 +275,14 @@ export const promptTemplates = {
       "short_answer_evaluation": [
         {
           "questionId": "string",
-          "score": number (0-100),
+          "score": number (integer 0-10, where 10 is a complete and accurate answer),
           "feedback": "string"
         }
       ],
       "writing_evaluation": [
         {
           "promptId": "string",
-          "score": number (0-100),
+          "score": number (integer 0-10, where 10 is excellent for this difficulty level),
           "feedback": "string",
           "strengths": ["string"],
           "improvements": ["string"]

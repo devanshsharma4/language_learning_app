@@ -1,68 +1,132 @@
-export interface VocabularyExtractionResult {
-  vocabulary: Array<{
-    word: string;
-    translation: string;
-    explanation: string;
-    partOfSpeech?: string;
-    example?: string;
-  }>;
-}
+import { z } from 'zod';
 
-export interface QuestionGenerationResult {
-  readingComprehension: Array<{
-    id: string;
-    question: string;
-    options: string[];
-    correctAnswer: number;
-  }>;
-  shortAnswer: Array<{
-    id: string;
-    question: string;
-    expectedAnswerGuidance: string;
-  }>;
-}
+/**
+ * Runtime schemas for every LLM response.
+ *
+ * These were previously plain interfaces, and `generateJSON` cast the parsed JSON
+ * to them with no validation. Consumers then dereferenced blindly --
+ * `questionsResult.readingComprehension.map(...)` -- so any drift in the model's
+ * output shape threw a raw TypeError deep in lessonService, surfaced as an opaque
+ * 500, and did so *after* three or four Claude calls had already been paid for.
+ *
+ * Validating at the boundary turns that into a typed, retryable failure. The
+ * TypeScript types are inferred from the schemas so the two cannot disagree.
+ */
 
-export interface VocabQuestionResult {
-  questions: Array<{
-    id: string;
-    word: string;
-    question: string;
-    options: string[];
-    correctAnswer: number;
-  }>;
-}
+const nonEmptyString = z.string().trim().min(1);
 
-export interface WritingPromptResult {
-  prompts: Array<{
-    id: string;
-    prompt: string;
-    minWords?: number;
-    maxWords?: number;
-  }>;
-}
+/** Exactly four options, which is what the UI's A-D labelling assumes. */
+const mcqOptions = z.array(nonEmptyString).length(4);
 
-export interface FeedbackResult {
-  short_answer_evaluation: Array<{
-    questionId: string;
-    score: number;
-    feedback: string;
-  }>;
-  writing_evaluation: Array<{
-    promptId: string;
-    score: number;
-    feedback: string;
-    strengths: string[];
-    improvements: string[];
-  }>;
-  grammar_corrections: Array<{
-    original: string;
-    corrected: string;
-    explanation: string;
-  }>;
-  vocabulary_suggestions: Array<{
-    original: string;
-    suggested: string;
-    reason: string;
-  }>;
-  overall_feedback: string;
-}
+export const vocabularyExtractionSchema = z.object({
+  // Optional: pre-existing lessons were generated before the prompt asked for a
+  // title, and a URL-sourced article already has one from its <title> tag.
+  title: z.string().trim().min(1).optional(),
+  vocabulary: z
+    .array(
+      z.object({
+        word: nonEmptyString,
+        translation: z.string().default(''),
+        explanation: z.string().default(''),
+        partOfSpeech: z.string().optional(),
+        example: z.string().optional(),
+      }),
+    )
+    .min(1),
+});
+
+export const questionGenerationSchema = z.object({
+  readingComprehension: z.array(
+    z.object({
+      id: nonEmptyString,
+      question: nonEmptyString,
+      options: mcqOptions,
+      correctAnswer: z.number().int().min(0).max(3),
+    }),
+  ),
+  shortAnswer: z.array(
+    z.object({
+      id: nonEmptyString,
+      question: nonEmptyString,
+      expectedAnswerGuidance: z.string().default(''),
+    }),
+  ),
+});
+
+export const vocabQuestionSchema = z.object({
+  questions: z.array(
+    z.object({
+      id: nonEmptyString,
+      word: nonEmptyString,
+      question: nonEmptyString,
+      options: mcqOptions,
+      correctAnswer: z.number().int().min(0).max(3),
+    }),
+  ),
+});
+
+export const writingPromptSchema = z.object({
+  prompts: z.array(
+    z.object({
+      id: nonEmptyString,
+      prompt: nonEmptyString,
+      minWords: z.number().int().positive().optional(),
+      maxWords: z.number().int().positive().optional(),
+    }),
+  ),
+});
+
+/**
+ * Free-text scores are 0-10 (see `clampScore` in lessonService). Coerced rather
+ * than rejected: a model returning "8" as a string is a formatting slip, not a
+ * reason to throw away a graded submission the user already waited for.
+ */
+const score = z.coerce.number();
+
+export const feedbackSchema = z.object({
+  short_answer_evaluation: z
+    .array(
+      z.object({
+        questionId: nonEmptyString,
+        score,
+        feedback: z.string().default(''),
+      }),
+    )
+    .default([]),
+  writing_evaluation: z
+    .array(
+      z.object({
+        promptId: nonEmptyString,
+        score,
+        feedback: z.string().default(''),
+        strengths: z.array(z.string()).default([]),
+        improvements: z.array(z.string()).default([]),
+      }),
+    )
+    .default([]),
+  grammar_corrections: z
+    .array(
+      z.object({
+        original: z.string().default(''),
+        corrected: z.string().default(''),
+        explanation: z.string().default(''),
+      }),
+    )
+    .default([]),
+  vocabulary_suggestions: z
+    .array(
+      z.object({
+        original: z.string().default(''),
+        suggested: z.string().default(''),
+        reason: z.string().default(''),
+      }),
+    )
+    .default([]),
+  overall_feedback: z.string().default(''),
+});
+
+export type VocabularyExtractionResult = z.infer<typeof vocabularyExtractionSchema>;
+export type QuestionGenerationResult = z.infer<typeof questionGenerationSchema>;
+export type VocabQuestionResult = z.infer<typeof vocabQuestionSchema>;
+export type WritingPromptResult = z.infer<typeof writingPromptSchema>;
+export type FeedbackResult = z.infer<typeof feedbackSchema>;

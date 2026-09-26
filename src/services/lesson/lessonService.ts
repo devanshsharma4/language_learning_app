@@ -13,6 +13,60 @@ import {
   VocabularyItem
 } from '../../types/models';
 
+/** lessons.article_title is VARCHAR(500); an over-long <title> used to fail the INSERT. */
+const TITLE_MAX_LENGTH = 500;
+
+function truncateTitle(title: string | undefined): string | undefined {
+  const trimmed = title?.trim();
+  if (!trimmed) return undefined;
+  return trimmed.length > TITLE_MAX_LENGTH
+    ? `${trimmed.slice(0, TITLE_MAX_LENGTH - 1)}…`
+    : trimmed;
+}
+
+/** Free-text scores are 0-10. The model is instructed to stay in range; this enforces it. */
+export const MAX_SCORE = 10;
+
+export function clampScore(score: unknown): number {
+  const n = typeof score === 'number' ? score : Number(score);
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(MAX_SCORE, Math.max(0, n));
+}
+
+/**
+ * Overall lesson score as a percentage, averaging whichever sections exist.
+ *
+ * MCQs are already a ratio; free-text sections are 0-10 and scale by 10. Returns
+ * null when a lesson has been graded but carries no scoreable section, so the UI
+ * can distinguish "no score" from "scored zero".
+ */
+export function computeOverallScore(feedback: {
+  mcq_results?: Array<{ correct: boolean }>;
+  short_answer_evaluation?: Array<{ score: unknown }>;
+  writing_evaluation?: Array<{ score: unknown }>;
+} | null | undefined): number | null {
+  if (!feedback) return null;
+
+  const parts: number[] = [];
+
+  const mcq = feedback.mcq_results ?? [];
+  if (mcq.length > 0) {
+    parts.push((mcq.filter(r => r.correct).length / mcq.length) * 100);
+  }
+
+  for (const section of [feedback.short_answer_evaluation, feedback.writing_evaluation]) {
+    if (section && section.length > 0) {
+      // clampScore also absorbs a missing or non-numeric score, which previously
+      // turned the whole average into NaN and serialised as null.
+      const avg = section.reduce((sum, e) => sum + clampScore(e.score), 0) / section.length;
+      parts.push(avg * 10);
+    }
+  }
+
+  if (parts.length === 0) return null;
+  return Math.round(parts.reduce((a, b) => a + b, 0) / parts.length);
+}
+
 export class LessonService {
   async createLesson(
     userId: number,
@@ -56,6 +110,12 @@ export class LessonService {
       vocabularyResult.vocabulary,
       vocabularyTarget(articleText, difficulty)
     );
+
+    // Pasted text has no <title> to scrape, so every pasted lesson showed as
+    // "Untitled Article" in the history list. The vocabulary call already receives
+    // the full article, so asking it for a headline costs no extra request.
+    // A scraped title still wins -- it is the author's own.
+    articleTitle = truncateTitle(articleTitle) ?? truncateTitle(vocabularyResult.title);
 
     // Step 2: Generate vocab MCQs (needs vocabulary output from step 1)
     const vocabQuestionsResult = await llmService.generateVocabQuestions(
@@ -145,31 +205,18 @@ export class LessonService {
 
     return {
       lessons: lessons.map((row: any) => {
-        const feedback = typeof row.ai_feedback === 'string'
-          ? JSON.parse(row.ai_feedback)
-          : row.ai_feedback;
-
-        let overallScore: number | null = null;
-        if (feedback) {
-          const parts: number[] = [];
-          if (feedback.mcq_results?.length > 0) {
-            const correct = feedback.mcq_results.filter((r: any) => r.correct).length;
-            parts.push((correct / feedback.mcq_results.length) * 100);
-          }
-          if (feedback.short_answer_evaluation?.length > 0) {
-            const avg = feedback.short_answer_evaluation.reduce((s: number, e: any) => s + e.score, 0)
-              / feedback.short_answer_evaluation.length;
-            parts.push(avg * 10);
-          }
-          if (feedback.writing_evaluation?.length > 0) {
-            const avg = feedback.writing_evaluation.reduce((s: number, e: any) => s + e.score, 0)
-              / feedback.writing_evaluation.length;
-            parts.push(avg * 10);
-          }
-          if (parts.length > 0) {
-            overallScore = Math.round(parts.reduce((a, b) => a + b, 0) / parts.length);
+        // One malformed row must not 500 the entire history page.
+        let feedback: any = row.ai_feedback;
+        if (typeof feedback === 'string') {
+          try {
+            feedback = JSON.parse(feedback);
+          } catch {
+            console.error(`Unparseable ai_feedback on lesson ${row.id}; treating as ungraded`);
+            feedback = null;
           }
         }
+
+        const overallScore = computeOverallScore(feedback);
 
         return {
           id: row.id,
@@ -208,22 +255,20 @@ export class LessonService {
         q.type === 'reading_comprehension' || q.type === 'vocabulary'
     );
 
-    const mcqResults: MCQResult[] = mcqAnswers.map(answer => {
-      const question = mcqQuestions.find(q => q.id === answer.questionId);
-      if (!question) {
-        return {
-          questionId: answer.questionId,
-          type: 'reading_comprehension' as const,
-          correct: false,
-          selectedAnswer: answer.selectedOption,
-          correctAnswer: -1
-        };
-      }
+    // Iterate the questions, not the submitted answers. Mapping over the
+    // client-supplied answers made the denominator "however many answers were
+    // sent", so answering 1 of 9 questions correctly scored 100% and every
+    // skipped question vanished instead of counting as wrong.
+    const mcqResults: MCQResult[] = mcqQuestions.map(question => {
+      const answer = mcqAnswers.find(a => a.questionId === question.id);
+      const selectedAnswer = answer ? answer.selectedOption : null;
+
       return {
-        questionId: answer.questionId,
+        questionId: question.id,
         type: question.type,
-        correct: answer.selectedOption === question.correctAnswer,
-        selectedAnswer: answer.selectedOption,
+        // An unanswered question is incorrect, never absent.
+        correct: selectedAnswer !== null && selectedAnswer === question.correctAnswer,
+        selectedAnswer,
         correctAnswer: question.correctAnswer
       };
     });
@@ -244,10 +289,21 @@ export class LessonService {
       lesson.language
     );
 
-    // Combine MCQ results with AI feedback
+    // Combine MCQ results with AI feedback. Scores are clamped on the way in so
+    // a model that ignores the 0-10 instruction cannot poison stored feedback --
+    // an out-of-range value reaches the UI as a percentage and, before this,
+    // rendered things like "850%" with a negative progress-ring offset.
     const fullFeedback = {
       mcq_results: mcqResults,
-      ...aiFeedback
+      ...aiFeedback,
+      short_answer_evaluation: aiFeedback.short_answer_evaluation?.map(e => ({
+        ...e,
+        score: clampScore(e.score)
+      })) ?? [],
+      writing_evaluation: aiFeedback.writing_evaluation?.map(e => ({
+        ...e,
+        score: clampScore(e.score)
+      })) ?? []
     };
 
     // Save response to database

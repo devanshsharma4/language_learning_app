@@ -1,13 +1,27 @@
 import Anthropic from '@anthropic-ai/sdk';
+import type { ZodType } from 'zod';
 import { env } from '../../config/env';
+import { AppError } from '../../middleware/errorHandler';
 import {
   VocabularyExtractionResult,
   QuestionGenerationResult,
   VocabQuestionResult,
   WritingPromptResult,
-  FeedbackResult
+  FeedbackResult,
+  vocabularyExtractionSchema,
+  questionGenerationSchema,
+  vocabQuestionSchema,
+  writingPromptSchema,
+  feedbackSchema
 } from './types';
 import { promptTemplates } from './prompts';
+
+const MODEL = 'claude-haiku-4-5-20251001';
+const MAX_TOKENS = 4000;
+
+/** Total attempts per call, including the first. Parse failures are usually transient. */
+const MAX_ATTEMPTS = 3;
+const BASE_BACKOFF_MS = 400;
 
 class LLMService {
   private client: Anthropic;
@@ -20,29 +34,65 @@ class LLMService {
 
   private async generateCompletion(prompt: string, temperature = 0.7): Promise<string> {
     const response = await this.client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 2000,
+      model: MODEL,
+      max_tokens: MAX_TOKENS,
       temperature,
       messages: [{ role: 'user', content: prompt }]
     });
 
-    const content = response.content[0];
-    if (content.type === 'text') {
-      return content.text;
+    // A response truncated at the token ceiling is never valid JSON, and silently
+    // returning it produces a confusing parse error instead of the real cause.
+    if (response.stop_reason === 'max_tokens') {
+      throw new Error(`Response truncated at ${MAX_TOKENS} tokens`);
     }
-    return '';
+
+    const content = response.content[0];
+    if (!content) {
+      throw new Error('Empty response from model');
+    }
+    if (content.type !== 'text') {
+      throw new Error(`Unexpected content block type: ${content.type}`);
+    }
+
+    return content.text;
   }
 
-  private async generateJSON<T>(prompt: string): Promise<T> {
+  /**
+   * Prompt the model, parse its JSON, and validate it against `schema`.
+   *
+   * Retries the whole call on a parse or validation failure, because that is the
+   * single most likely failure in this pipeline and it is usually transient. Three
+   * of the four lesson-creation calls run in parallel, so failing outright also
+   * throws away work already paid for.
+   *
+   * Exhausting the retries raises a 503 AppError rather than falling through to a
+   * generic 500, so the UI can tell the user it is worth trying again.
+   */
+  private async generateJSON<T>(prompt: string, schema: ZodType<T>, label: string): Promise<T> {
     const jsonPrompt = `${prompt}\n\nIMPORTANT: Respond ONLY with valid JSON, no markdown formatting or explanations.`;
-    const response = await this.generateCompletion(jsonPrompt, 0.3);
+    let lastError: unknown;
 
-    try {
-      return JSON.parse(response.replace(/```json\n?|\n?```/g, '').trim());
-    } catch (error) {
-      console.error('Failed to parse JSON response:', response);
-      throw new Error('Invalid JSON response from LLM');
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const response = await this.generateCompletion(jsonPrompt, 0.3);
+        const cleaned = response.replace(/```json\n?|\n?```/g, '').trim();
+        return schema.parse(JSON.parse(cleaned));
+      } catch (error) {
+        lastError = error;
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[llm] ${label} attempt ${attempt}/${MAX_ATTEMPTS} failed: ${message}`);
+
+        if (attempt < MAX_ATTEMPTS) {
+          await new Promise(resolve => setTimeout(resolve, BASE_BACKOFF_MS * 2 ** (attempt - 1)));
+        }
+      }
     }
+
+    console.error(`[llm] ${label} exhausted ${MAX_ATTEMPTS} attempts`, lastError);
+    throw new AppError(
+      503,
+      'The AI could not produce a usable response for this article. Please try again.'
+    );
   }
 
   async extractVocabulary(
@@ -51,7 +101,7 @@ class LLMService {
     difficulty: string
   ): Promise<VocabularyExtractionResult> {
     const prompt = promptTemplates.vocabularyExtraction(text, language, difficulty);
-    return this.generateJSON<VocabularyExtractionResult>(prompt);
+    return this.generateJSON(prompt, vocabularyExtractionSchema, 'extractVocabulary');
   }
 
   async generateQuestions(
@@ -60,7 +110,7 @@ class LLMService {
     difficulty: string
   ): Promise<QuestionGenerationResult> {
     const prompt = promptTemplates.questionGeneration(text, language, difficulty);
-    return this.generateJSON<QuestionGenerationResult>(prompt);
+    return this.generateJSON(prompt, questionGenerationSchema, 'generateQuestions');
   }
 
   async generateVocabQuestions(
@@ -69,7 +119,7 @@ class LLMService {
     difficulty: string
   ): Promise<VocabQuestionResult> {
     const prompt = promptTemplates.vocabQuestionGeneration(vocabulary, language, difficulty);
-    return this.generateJSON<VocabQuestionResult>(prompt);
+    return this.generateJSON(prompt, vocabQuestionSchema, 'generateVocabQuestions');
   }
 
   async generateWritingPrompts(
@@ -78,7 +128,7 @@ class LLMService {
     difficulty: string
   ): Promise<WritingPromptResult> {
     const prompt = promptTemplates.writingPromptGeneration(text, language, difficulty);
-    return this.generateJSON<WritingPromptResult>(prompt);
+    return this.generateJSON(prompt, writingPromptSchema, 'generateWritingPrompts');
   }
 
   async generateFeedback(
@@ -97,12 +147,7 @@ class LLMService {
       writingResponses,
       language
     );
-    return this.generateJSON<FeedbackResult>(prompt);
-  }
-
-  async translateText(text: string, fromLang: string, toLang: string): Promise<string> {
-    const prompt = `Translate the following ${fromLang} text to ${toLang}. Provide only the translation, no explanations:\n\n${text}`;
-    return this.generateCompletion(prompt);
+    return this.generateJSON(prompt, feedbackSchema, 'generateFeedback');
   }
 }
 

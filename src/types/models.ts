@@ -83,7 +83,8 @@ export interface MCQResult {
   questionId: string;
   type: 'reading_comprehension' | 'vocabulary';
   correct: boolean;
-  selectedAnswer: number;
+  /** null when the question was left unanswered. Graded as incorrect. */
+  selectedAnswer: number | null;
   correctAnswer: number;
 }
 

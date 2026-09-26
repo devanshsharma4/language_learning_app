@@ -1,16 +1,10 @@
 import { Link } from 'react-router-dom';
+import { languageNativeName } from '../../lib/languages';
 
 interface LessonHeaderProps {
   language: string;
   difficulty: string;
 }
-
-const languageLabels: Record<string, string> = {
-  spanish: 'Espanol',
-  french: 'Francais',
-  japanese: '\u65E5\u672C\u8A9E',
-  korean: '\uD55C\uAD6D\uC5B4',
-};
 
 export default function LessonHeader({ language, difficulty }: LessonHeaderProps) {
   return (
@@ -20,6 +14,7 @@ export default function LessonHeader({ language, difficulty }: LessonHeaderProps
         className="flex items-center gap-2 text-bark-light hover:text-bark transition-colors duration-200"
       >
         <svg
+          aria-hidden="true"
           width="20"
           height="20"
           viewBox="0 0 24 24"
@@ -36,7 +31,7 @@ export default function LessonHeader({ language, difficulty }: LessonHeaderProps
 
       <div className="flex items-center gap-2">
         <span className="bg-sage/15 text-sage-dark rounded-full px-3 py-1 text-sm font-medium">
-          {languageLabels[language] || language}
+          {languageNativeName(language)}
         </span>
         <span className="bg-cream-dark text-bark-light rounded-full px-3 py-1 text-sm font-medium capitalize">
           {difficulty}

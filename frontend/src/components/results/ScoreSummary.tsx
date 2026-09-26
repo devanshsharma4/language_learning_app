@@ -1,10 +1,14 @@
 import type { Feedback } from '../../types';
+import { MAX_SCORE, computeSectionScores } from '../../lib/score';
 
 interface ScoreSummaryProps {
   feedback: Feedback;
 }
 
-function CircularProgress({ score, size = 120 }: { score: number; size?: number }) {
+function CircularProgress({ score: rawScore, size = 120 }: { score: number; size?: number }) {
+  // Clamped at the point of use: an out-of-range score used to render a negative
+  // strokeDashoffset, which draws the ring inside-out rather than failing loudly.
+  const score = Math.min(100, Math.max(0, Number.isFinite(rawScore) ? rawScore : 0));
   const strokeWidth = 8;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -58,55 +62,41 @@ function StatCard({ label, value, subtext }: { label: string; value: string; sub
 }
 
 export default function ScoreSummary({ feedback }: ScoreSummaryProps) {
-  const { mcq_results, short_answer_evaluation, writing_evaluation } = feedback;
+  const { mcqCorrect, mcqTotal, mcqPct, shortAnswerAvg, writingAvg, overall } =
+    computeSectionScores(feedback);
 
-  const mcqCorrect = mcq_results.filter(r => r.correct).length;
-  const mcqTotal = mcq_results.length;
-  const mcqPct = mcqTotal > 0 ? (mcqCorrect / mcqTotal) * 100 : 0;
-
-  const saAvg =
-    short_answer_evaluation.length > 0
-      ? short_answer_evaluation.reduce((sum, e) => sum + e.score, 0) / short_answer_evaluation.length
-      : 0;
-
-  const writingAvg =
-    writing_evaluation.length > 0
-      ? writing_evaluation.reduce((sum, e) => sum + e.score, 0) / writing_evaluation.length
-      : 0;
-
-  // Weighted overall: MCQ 40%, short answer 30%, writing 30%
-  const parts: number[] = [];
-  if (mcqTotal > 0) parts.push(mcqPct);
-  if (short_answer_evaluation.length > 0) parts.push(saAvg * 10); // scores are 1-10, scale to 100
-  if (writing_evaluation.length > 0) parts.push(writingAvg * 10);
-  const overall = parts.length > 0 ? parts.reduce((a, b) => a + b, 0) / parts.length : 0;
+  // Only sections the lesson actually had are rendered, so the column count has
+  // to follow the data -- a fixed grid-cols-3 left a hole with one or two stats,
+  // and squeezed three labels into ~90px each on a phone.
+  const stats = [
+    mcqPct !== null && {
+      label: 'Multiple Choice',
+      value: `${mcqCorrect}/${mcqTotal}`,
+      subtext: `${Math.round(mcqPct)}%`,
+    },
+    shortAnswerAvg !== null && {
+      label: 'Short Answer',
+      value: `${shortAnswerAvg.toFixed(1)}/${MAX_SCORE}`,
+      subtext: 'avg score',
+    },
+    writingAvg !== null && {
+      label: 'Writing',
+      value: `${writingAvg.toFixed(1)}/${MAX_SCORE}`,
+      subtext: 'avg score',
+    },
+  ].filter((s): s is { label: string; value: string; subtext: string } => Boolean(s));
 
   return (
     <div className="bg-white rounded-2xl border border-sand shadow-sm px-8 py-5">
       <div className="flex flex-col sm:flex-row items-center gap-6">
-        <CircularProgress score={overall} />
-        <div className="flex-1 grid grid-cols-3 gap-6">
-          {mcqTotal > 0 && (
-            <StatCard
-              label="Multiple Choice"
-              value={`${mcqCorrect}/${mcqTotal}`}
-              subtext={`${Math.round(mcqPct)}%`}
-            />
-          )}
-          {short_answer_evaluation.length > 0 && (
-            <StatCard
-              label="Short Answer"
-              value={`${saAvg.toFixed(1)}/10`}
-              subtext="avg score"
-            />
-          )}
-          {writing_evaluation.length > 0 && (
-            <StatCard
-              label="Writing"
-              value={`${writingAvg.toFixed(1)}/10`}
-              subtext="avg score"
-            />
-          )}
+        <CircularProgress score={overall ?? 0} />
+        <div
+          className="flex-1 grid gap-6 w-full"
+          style={{ gridTemplateColumns: `repeat(${Math.min(stats.length, 2)}, minmax(0, 1fr))` }}
+        >
+          {stats.map((stat) => (
+            <StatCard key={stat.label} {...stat} />
+          ))}
         </div>
       </div>
     </div>
