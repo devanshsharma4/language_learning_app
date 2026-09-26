@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useParams, useLocation, Link } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useLocation, Link, Navigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import api from '../api/client';
 import { useDebounce } from '../hooks/useDebounce';
@@ -33,6 +33,9 @@ export default function LessonResults() {
   const [noteLoaded, setNoteLoaded] = useState(false);
   const [vocabOpen, setVocabOpen] = useState(false);
   const debouncedNote = useDebounce(noteContent, 1000);
+  // What the server is known to hold. Compared against before every autosave so
+  // simply opening the page does not re-POST the note it just loaded.
+  const lastSavedNote = useRef<string | null>(null);
 
   const { data, isLoading, error } = useQuery<{ lesson: Lesson; response: LessonResponse }>({
     queryKey: ['lessonResults', id],
@@ -58,24 +61,44 @@ export default function LessonResults() {
   useEffect(() => {
     if (notesData && !noteLoaded) {
       const existing = notesData.note ?? notesData.notes?.[0];
-      if (existing) {
-        setNoteContent(existing.content);
-      }
+      const content = existing?.content ?? '';
+      setNoteContent(content);
+      lastSavedNote.current = content;
       setNoteLoaded(true);
     }
   }, [notesData, noteLoaded]);
 
-  // Auto-save note
+  // Auto-save note.
+  //
+  // An empty note is sent as a deletion rather than skipped: the old guard
+  // required non-empty content, so clearing a note never persisted and the old
+  // text reappeared on the next visit.
   const saveMutation = useMutation({
     mutationFn: async (content: string) => {
+      if (content === '') {
+        const existing = notesData?.note ?? notesData?.notes?.[0];
+        if (existing) await api.delete(`/notes/${existing.id}`);
+        return;
+      }
       await api.post('/notes', { lessonId: Number(id), content });
+    },
+    onSuccess: (_result, content) => {
+      lastSavedNote.current = content;
     },
   });
 
   useEffect(() => {
-    if (noteLoaded && debouncedNote.trim() && !isDemo) {
-      saveMutation.mutate(debouncedNote.trim());
-    }
+    if (!noteLoaded || isDemo) return;
+
+    const next = debouncedNote.trim();
+    // Skip when nothing changed. Without this, loading a note set state, the
+    // debounce caught up, and every page view wrote the note back unchanged.
+    if (next === lastSavedNote.current) return;
+
+    saveMutation.mutate(next);
+    // saveMutation is intentionally omitted: it is recreated each render and
+    // including it would re-fire the effect on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedNote, noteLoaded, isDemo]);
 
   const lesson = navState?.lesson ?? data?.lesson;
@@ -98,18 +121,42 @@ export default function LessonResults() {
   }
 
   if (error || !lesson || !feedback) {
+    // The demo is graded in the browser and its results live only in router
+    // state, so a direct visit or a refresh has nothing to show. Send the user
+    // back to take it rather than showing a dead end.
+    if (isDemo) {
+      return <Navigate to="/lessons/demo" replace />;
+    }
+
+    const isMissingResults = !error;
+
     return (
-      <div className="min-h-screen bg-cream font-body flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-bark-light mb-4">
-            {error ? 'Failed to load results.' : 'No results available for this lesson.'}
+      <div className="min-h-screen bg-cream font-body flex items-center justify-center px-6">
+        <div className="text-center max-w-sm">
+          <p className="text-bark font-medium mb-2">
+            {isMissingResults ? 'This lesson hasn’t been submitted yet' : 'Couldn’t load results'}
           </p>
-          <Link
-            to="/dashboard"
-            className="text-sage-dark hover:text-olive transition-colors duration-200"
-          >
-            Back to Dashboard
-          </Link>
+          <p className="text-bark-light text-sm mb-5">
+            {isMissingResults
+              ? 'Answer the questions and submit to see your feedback.'
+              : 'Something went wrong fetching your feedback. Try again in a moment.'}
+          </p>
+          <div className="flex items-center justify-center gap-4">
+            {isMissingResults && id && (
+              <Link
+                to={`/lessons/${id}`}
+                className="bg-sage hover:bg-sage-dark text-white font-semibold rounded-2xl px-5 py-2.5 transition-colors duration-200"
+              >
+                Go to lesson
+              </Link>
+            )}
+            <Link
+              to="/dashboard"
+              className="text-sage-dark hover:text-olive transition-colors duration-200"
+            >
+              Back to Dashboard
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -207,20 +254,29 @@ export default function LessonResults() {
             {/* Note textarea */}
             <div className="mb-6">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="font-display text-2xl font-semibold text-bark">My Notes</h2>
-                {saveMutation.isPending && (
-                  <span className="text-xs text-bark-light/50">Saving...</span>
-                )}
-                {saveMutation.isSuccess && !saveMutation.isPending && noteContent.trim() && (
-                  <span className="text-xs text-sage-dark/60">Saved</span>
-                )}
+                <label htmlFor="lesson-note" className="font-display text-2xl font-semibold text-bark">
+                  My Notes
+                </label>
+                {/* aria-live so the save state is announced, not just shown. */}
+                <span role="status" aria-live="polite" className="text-xs">
+                  {saveMutation.isPending && <span className="text-bark-light">Saving...</span>}
+                  {saveMutation.isError && !saveMutation.isPending && (
+                    <span className="text-terracotta font-medium">
+                      Couldn&apos;t save — your text is still here, retrying on the next edit.
+                    </span>
+                  )}
+                  {saveMutation.isSuccess && !saveMutation.isPending && (
+                    <span className="text-sage-dark">Saved</span>
+                  )}
+                </span>
               </div>
               <textarea
+                id="lesson-note"
                 value={noteContent}
                 onChange={(e) => setNoteContent(e.target.value)}
                 placeholder="Jot down thoughts, things to remember, patterns you noticed..."
                 rows={4}
-                className="w-full px-4 py-4 bg-white rounded-2xl border border-sand text-bark placeholder:text-bark-light/40 focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage/50 shadow-sm hover:shadow-md transition-all duration-200 resize-none"
+                className="w-full px-4 py-4 bg-white rounded-2xl border border-sand text-bark placeholder:text-bark-light/60 focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage/50 shadow-sm hover:shadow-md transition-all duration-200 resize-none"
               />
             </div>
 

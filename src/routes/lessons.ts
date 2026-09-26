@@ -3,11 +3,16 @@ import { z } from 'zod';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { lessonService } from '../services/lesson/lessonService';
 import { AppError } from '../middleware/errorHandler';
+import { lessonCreationLimiter, submissionLimiter } from '../middleware/rateLimit';
+import { parsePagination } from './pagination';
 
 const router = Router();
 
+/** The languages the prompts are written for. Shared with the auth route. */
+export const LANGUAGES = ['spanish', 'french', 'japanese', 'korean'] as const;
+
 const createLessonSchema = z.object({
-  language: z.enum(['spanish', 'french', 'japanese', 'korean']),
+  language: z.enum(LANGUAGES),
   difficulty: z.enum(['beginner', 'intermediate', 'advanced']),
   articleText: z.string().optional(),
   articleUrl: z.string().url().optional()
@@ -15,11 +20,15 @@ const createLessonSchema = z.object({
   message: 'Either articleText or articleUrl must be provided'
 });
 
+/** No question may be answered twice; grading looks up by id and would pick one arbitrarily. */
+const uniqueQuestionIds = <T extends { questionId: string }>(answers: T[]) =>
+  new Set(answers.map(a => a.questionId)).size === answers.length;
+
 const submitResponseSchema = z.object({
   mcqAnswers: z.array(z.object({
     questionId: z.string(),
     selectedOption: z.number().int().min(0).max(3)
-  })),
+  })).refine(uniqueQuestionIds, { message: 'Duplicate questionId in mcqAnswers' }),
   shortAnswerResponses: z.array(z.object({
     questionId: z.string(),
     answer: z.string()
@@ -30,8 +39,11 @@ const submitResponseSchema = z.object({
   }))
 });
 
-// Create a new lesson
-router.post('/create', authenticate, async (req: AuthRequest, res, next) => {
+// Create a new lesson.
+//
+// The limiter runs after `authenticate` so it can key on the user id: this route
+// fans out to four Claude calls, and the cost lands on the account, not the IP.
+router.post('/create', authenticate, lessonCreationLimiter, async (req: AuthRequest, res, next) => {
   try {
     if (!req.user) {
       throw new AppError(401, 'Not authenticated');
@@ -68,8 +80,7 @@ router.get('/', authenticate, async (req: AuthRequest, res, next) => {
       throw new AppError(401, 'Not authenticated');
     }
 
-    const limit = parseInt(req.query.limit as string) || 20;
-    const offset = parseInt(req.query.offset as string) || 0;
+    const { limit, offset } = parsePagination(req.query);
 
     const result = await lessonService.getUserLessons(
       req.user.userId,
@@ -118,7 +129,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res, next) => {
 });
 
 // Submit lesson response
-router.post('/:id/submit', authenticate, async (req: AuthRequest, res, next) => {
+router.post('/:id/submit', authenticate, submissionLimiter, async (req: AuthRequest, res, next) => {
   try {
     if (!req.user) {
       throw new AppError(401, 'Not authenticated');

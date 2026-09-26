@@ -5,6 +5,7 @@ import api from '../api/client';
 import { useDebounce } from '../hooks/useDebounce';
 import type { Lesson, LessonResponse } from '../types';
 import { MOCK_LESSON } from '../fixtures/mockLesson';
+import { gradeDemoLesson } from '../lib/demoGrading';
 import LessonHeader from '../components/lesson/LessonHeader';
 import ArticleSection from '../components/lesson/ArticleSection';
 import QuestionsSection from '../components/lesson/QuestionsSection';
@@ -167,6 +168,22 @@ export default function LessonView() {
 
   const submitMutation = useMutation({
     mutationFn: async () => {
+      // The demo lesson has no row in the database -- 'demo' is a route param,
+      // not an id -- so submitting it to the API returns 400. Grade it here
+      // instead; MCQ scoring is identical to the server's.
+      if (isDemo && lesson) {
+        return {
+          response: {
+            ai_feedback: gradeDemoLesson(
+              lesson,
+              formState.mcqAnswers,
+              formState.shortAnswers,
+              formState.writingResponses
+            ),
+          },
+        };
+      }
+
       const mcqAnswers = Object.entries(formState.mcqAnswers).map(
         ([questionId, selectedOption]) => ({ questionId, selectedOption })
       );

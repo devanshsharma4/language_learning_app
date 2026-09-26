@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../api/client';
+import { hasAuthToken } from './useAuth';
 import type { SavedVocabulary } from '../types';
 
 interface VocabularyResponse {
@@ -27,7 +28,11 @@ export function useSavedWords(language: string): Set<string> {
       const { data } = await api.get(`/vocabulary?${params}`);
       return data.data ?? data;
     },
-    enabled: !!language,
+    // Skipped entirely when signed out. The public demo lesson renders this
+    // component, and an unauthenticated /vocabulary call 401s -- which the
+    // response interceptor turns into a hard redirect to /login, ejecting a
+    // first-time visitor from the demo before they can read it.
+    enabled: !!language && hasAuthToken(),
   });
 
   return useMemo(

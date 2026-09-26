@@ -80,11 +80,27 @@ export class AuthService {
   }
 
   verifyToken(token: string): AuthPayload {
+    let decoded: unknown;
+
     try {
-      return jwt.verify(token, env.JWT_SECRET) as AuthPayload;
-    } catch (error) {
+      decoded = jwt.verify(token, env.JWT_SECRET);
+    } catch {
       throw new AppError(401, 'Invalid or expired token');
     }
+
+    // Verifying the signature says the token was issued by us, not that it has
+    // the shape we expect. Casting blind meant a differently-shaped payload gave
+    // req.user.userId === undefined, which pg sends as NULL -- so every ownership
+    // check quietly matched zero rows instead of returning 401.
+    if (
+      typeof decoded !== 'object' ||
+      decoded === null ||
+      typeof (decoded as AuthPayload).userId !== 'number'
+    ) {
+      throw new AppError(401, 'Invalid or expired token');
+    }
+
+    return decoded as AuthPayload;
   }
 
   async getUserById(userId: number): Promise<Partial<User> | null> {

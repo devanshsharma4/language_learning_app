@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { VocabularyItem } from '../../types';
 import api from '../../api/client';
+import { hasAuthToken } from '../../hooks/useAuth';
 
 interface VocabPopoverProps {
   vocab: VocabularyItem;
@@ -99,6 +100,7 @@ export default function VocabPopover({
     },
   });
 
+  const signedIn = hasAuthToken();
   const saved = alreadySaved || save.isSuccess;
 
   // Portal to document.body so the popover isn't clipped by the <p> tag,
@@ -151,6 +153,16 @@ export default function VocabPopover({
             View collection
           </Link>
         </div>
+      ) : !signedIn ? (
+        /* The demo lesson is public. Saving needs an account, and attempting it
+           while signed out 401s into a hard redirect to /login, which would
+           discard the lesson. Offer the sign-up instead of the broken action. */
+        <Link
+          to="/register"
+          className="mt-3 block text-xs text-sage-dark hover:text-olive transition-colors duration-200"
+        >
+          Sign up to save words →
+        </Link>
       ) : (
         <button
           onClick={() => save.mutate()}

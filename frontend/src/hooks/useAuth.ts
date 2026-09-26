@@ -5,6 +5,18 @@ import type { User } from '../types';
 export const AUTH_QUERY_KEY = ['auth', 'me'] as const;
 
 /**
+ * Synchronous check for a stored token, for code that needs to decide whether to
+ * make an authenticated request at all but does not need the user object.
+ *
+ * This matters on the public demo route: an authenticated request from a
+ * signed-out visitor 401s, and the response interceptor hard-redirects to
+ * /login -- which would throw a first-time visitor out of the demo.
+ */
+export function hasAuthToken(): boolean {
+  return !!localStorage.getItem('token');
+}
+
+/**
  * Single source of truth for the current user.
  *
  * `hasToken` is a synchronous localStorage read, so guards can redirect a

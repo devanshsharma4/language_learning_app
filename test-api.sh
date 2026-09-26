@@ -49,12 +49,38 @@ echo ""
 echo ""
 
 echo "=== 7. Submit Responses (takes a few seconds) ==="
-curl -s -X POST "$BASE/api/lessons/$LESSON_ID/submit" -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" -d '{"questionAnswers":{"q1":{"answer":"El gato se sento en la alfombra"},"q2":{"answer":"El gato jugaba y perseguia a los pajaros"},"q3":{"answer":"Los ninos le daban comida"}},"writingResponses":[{"promptId":"p1","response":"El gato dormia junto a la chimenea por la noche. Durante el dia, el gato jugaba en el jardin y perseguia a los pajaros."}]}'
+# The payload is built from the lesson that was just created rather than
+# hardcoded. This step used to send {"questionAnswers": ...} with invented ids
+# like "q1" -- a body shape the API stopped accepting when answers were split
+# into mcqAnswers and shortAnswerResponses, so it had always returned 400.
+SUBMIT_BODY=$(echo "$LESSON" | python3 -c '
+import json, sys
+lesson = json.load(sys.stdin)["data"]["lesson"]
+mcqs = [q for q in lesson["questions"] if "options" in q]
+short = [q for q in lesson["questions"] if q["type"] == "short_answer"]
+print(json.dumps({
+    # Answer every MCQ correctly so the expected score is a known 100%.
+    "mcqAnswers": [
+        {"questionId": q["id"], "selectedOption": q["correctAnswer"]} for q in mcqs
+    ],
+    "shortAnswerResponses": [
+        {"questionId": q["id"], "answer": "El gato jugaba en el jardin y perseguia a los pajaros."}
+        for q in short
+    ],
+    "writingResponses": [
+        {"promptId": p["id"], "response": "El gato dormia junto a la chimenea por la noche. Durante el dia jugaba en el jardin."}
+        for p in lesson["writing_prompts"]
+    ],
+}))
+')
+curl -s -X POST "$BASE/api/lessons/$LESSON_ID/submit" -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" -d "$SUBMIT_BODY"
 echo ""
 echo ""
 
 echo "=== 8. Save Vocabulary ==="
-curl -s -X POST $BASE/api/vocabulary/save -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" -d '{"word":"gato","translation":"cat","explanation":"A domestic cat","context":"El gato se sento en la alfombra","language":"spanish"}'
+SAVED=$(curl -s -X POST $BASE/api/vocabulary/save -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" -d '{"word":"gato","translation":"cat","explanation":"A domestic cat","context":"El gato se sento en la alfombra","language":"spanish"}')
+echo "$SAVED"
+VOCAB_ID=$(echo "$SAVED" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["vocabulary"]["id"])')
 echo ""
 echo ""
 
@@ -63,8 +89,10 @@ curl -s "$BASE/api/vocabulary?language=spanish" -H "Authorization: Bearer $TOKEN
 echo ""
 echo ""
 
-echo "=== 10. Delete Vocabulary (id=1) ==="
-curl -s -X DELETE "$BASE/api/vocabulary/1" -H "Authorization: Bearer $TOKEN"
+# Deletes the word saved in step 8 rather than a hardcoded id=1, which stopped
+# existing as soon as the test database was reset.
+echo "=== 10. Delete Vocabulary (id=$VOCAB_ID) ==="
+curl -s -X DELETE "$BASE/api/vocabulary/$VOCAB_ID" -H "Authorization: Bearer $TOKEN"
 echo ""
 echo ""
 

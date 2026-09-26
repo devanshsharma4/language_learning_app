@@ -1,11 +1,24 @@
 import { Pool } from 'pg';
-import { env } from './env';
+import { env, isProduction } from './env';
 
 export const pool = new Pool({
   connectionString: env.DATABASE_URL,
-  max: 20,
+  // Managed Postgres (Render, Neon, Heroku) requires TLS and presents a cert
+  // signed by its own internal CA, which Node does not trust by default.
+  // rejectUnauthorized:false accepts it; the connection is still encrypted.
+  ssl: isProduction ? { rejectUnauthorized: false } : undefined,
+  // Free and hobby plans cap total connections well below 20, and exceeding the
+  // cap fails the whole pool rather than queueing.
+  max: isProduction ? 8 : 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  // 2s is too tight for a managed instance waking from idle.
+  connectionTimeoutMillis: 10000,
+});
+
+// Without a listener, an idle client erroring out (a routine occurrence when a
+// managed database restarts) is an unhandled 'error' event, which crashes Node.
+pool.on('error', (error) => {
+  console.error('Unexpected error on idle database client:', error);
 });
 
 export async function query<T = any>(text: string, params?: any[]): Promise<T[]> {
@@ -27,7 +40,11 @@ export async function transaction<T>(
     await client.query('COMMIT');
     return result;
   } catch (error) {
-    await client.query('ROLLBACK');
+    // A failed ROLLBACK (broken connection) must not replace the error that
+    // caused it -- that one is the diagnosis, and it was previously lost.
+    await client.query('ROLLBACK').catch((rollbackError) => {
+      console.error('ROLLBACK failed while handling another error:', rollbackError);
+    });
     throw error;
   } finally {
     client.release();

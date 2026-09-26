@@ -1,8 +1,46 @@
+import dns from 'dns/promises';
+import net from 'net';
 import { JSDOM } from 'jsdom';
 import { Readability } from '@mozilla/readability';
 import { AppError } from '../../middleware/errorHandler';
 
 const FETCH_TIMEOUT_MS = 15000;
+
+/**
+ * True for any address that is not routable on the public internet: loopback,
+ * RFC1918 private ranges, link-local (which covers cloud metadata endpoints at
+ * 169.254.169.254), carrier-grade NAT, and their IPv6 equivalents.
+ */
+function isPrivateAddress(address: string): boolean {
+  const version = net.isIP(address);
+
+  if (version === 4) {
+    const parts = address.split('.').map(Number);
+    const [a = 0, b = 0] = parts;
+
+    if (a === 0 || a === 10 || a === 127) return true; // this-network, private, loopback
+    if (a === 169 && b === 254) return true; // link-local, incl. cloud metadata
+    if (a === 172 && b >= 16 && b <= 31) return true; // private
+    if (a === 192 && b === 168) return true; // private
+    if (a === 100 && b >= 64 && b <= 127) return true; // carrier-grade NAT
+    if (a >= 224) return true; // multicast and reserved
+    return false;
+  }
+
+  if (version === 6) {
+    const normalized = address.toLowerCase().split('%')[0] ?? '';
+    if (normalized === '::' || normalized === '::1') return true; // unspecified, loopback
+    if (normalized.startsWith('fe80')) return true; // link-local
+    if (/^f[cd]/.test(normalized)) return true; // unique local
+    // IPv4-mapped (::ffff:127.0.0.1) must be judged on the embedded address.
+    const mapped = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (mapped?.[1]) return isPrivateAddress(mapped[1]);
+    return false;
+  }
+
+  // Not a literal address; the caller resolves hostnames before calling this.
+  return true;
+}
 
 export class ArticleService {
   private readonly MAX_ARTICLE_LENGTH = 10000;
@@ -12,7 +50,7 @@ export class ArticleService {
     url: string
   ): Promise<{ title: string; text: string; truncated: boolean }> {
     try {
-      this.assertFetchableUrl(url);
+      await this.assertFetchableUrl(url);
 
       // Without a timeout an unresponsive host holds the request open
       // indefinitely, and this endpoint already costs four LLM calls.
@@ -57,13 +95,25 @@ export class ArticleService {
   }
 
   /**
-   * Blocks non-web protocols so a URL can't be used to reach the local
-   * filesystem or internal services (file://, etc.).
+   * Rejects URLs that could be used to reach anything but the public internet.
    *
-   * Note: this does NOT stop requests to private IPs — a full SSRF defense
-   * needs DNS resolution plus an address-range check before connecting.
+   * This endpoint fetches a URL supplied by the user and returns its text back to
+   * them, which is a server-side request forgery primitive: on a cloud host,
+   * `http://169.254.169.254/latest/meta-data/` reaches the instance metadata
+   * service, and `http://localhost:5432` reaches our own database. Checking the
+   * protocol alone -- as this used to -- does not stop either.
+   *
+   * So the hostname is resolved and every address it maps to is checked against
+   * the private ranges before we connect. Resolving first also blocks the obvious
+   * bypasses: a public hostname with a private A record, and decimal or IPv6
+   * spellings of a loopback address.
+   *
+   * Remaining gap, accepted deliberately: DNS could return a public address here
+   * and a private one when the fetch re-resolves (a rebinding attack). Closing
+   * that means pinning the resolved address through the connection, which needs a
+   * custom agent. Documented in docs/SCALE.md rather than half-built.
    */
-  private assertFetchableUrl(url: string): void {
+  private async assertFetchableUrl(url: string): Promise<void> {
     let parsed: URL;
 
     try {
@@ -74,6 +124,18 @@ export class ArticleService {
 
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       throw new AppError(400, 'Article URL must start with http:// or https://');
+    }
+
+    let addresses: string[];
+    try {
+      const resolved = await dns.lookup(parsed.hostname, { all: true });
+      addresses = resolved.map((entry) => entry.address);
+    } catch {
+      throw new AppError(400, 'Could not resolve that URL. Check the address and try again.');
+    }
+
+    if (addresses.length === 0 || addresses.some(isPrivateAddress)) {
+      throw new AppError(400, 'That URL points to a private address and cannot be fetched.');
     }
   }
 

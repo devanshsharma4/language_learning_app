@@ -58,7 +58,16 @@ export default function WritingPromptsSection({
                         : 'text-bark-light/60'
                   }`}
                 >
-                  {wordCount} / {prompt.minWords}–{prompt.maxWords} words
+                  {/* Both bounds are optional, but this used to print both
+                      unconditionally -- a prompt with only minWords rendered
+                      "12 / 50–undefined words". */}
+                  {wordCount} /{' '}
+                  {prompt.minWords && prompt.maxWords
+                    ? `${prompt.minWords}–${prompt.maxWords}`
+                    : prompt.minWords
+                      ? `${prompt.minWords}+`
+                      : `up to ${prompt.maxWords}`}{' '}
+                  words
                 </p>
               )}
             </div>

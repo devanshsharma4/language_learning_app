@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { query } from '../config/database';
 import { AppError } from '../middleware/errorHandler';
+import { parsePagination } from './pagination';
 import { Note } from '../types/models';
 
 const router = Router();
@@ -23,9 +24,18 @@ router.get('/', authenticate, async (req: AuthRequest, res, next) => {
       throw new AppError(401, 'Not authenticated');
     }
 
-    const lessonId = req.query.lessonId ? parseInt(req.query.lessonId as string) : null;
-    const limit = parseInt(req.query.limit as string) || 50;
-    const offset = parseInt(req.query.offset as string) || 0;
+    const { limit, offset } = parsePagination(req.query);
+
+    // `parseInt('abc')` is NaN, which is falsy, so an invalid lessonId used to be
+    // dropped silently and the endpoint returned every note instead of rejecting.
+    let lessonId: number | null = null;
+    if (req.query.lessonId !== undefined) {
+      const parsed = Number(req.query.lessonId);
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        throw new AppError(400, 'Invalid lessonId');
+      }
+      lessonId = parsed;
+    }
 
     let queryText = `
       SELECT n.*, l.article_title, l.language, l.difficulty

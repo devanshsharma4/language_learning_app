@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { query } from '../config/database';
 import { AppError } from '../middleware/errorHandler';
+import { parsePagination } from './pagination';
 import { SavedVocabulary } from '../types/models';
 
 const router = Router();
@@ -61,8 +62,7 @@ router.get('/', authenticate, async (req: AuthRequest, res, next) => {
     }
 
     const language = req.query.language as string;
-    const limit = parseInt(req.query.limit as string) || 50;
-    const offset = parseInt(req.query.offset as string) || 0;
+    const { limit, offset } = parsePagination(req.query);
 
     let queryText = `
       SELECT * FROM saved_vocabulary 

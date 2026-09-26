@@ -80,7 +80,11 @@ export default function Dashboard() {
           ? 'too long'
           : null;
 
-  const canSubmit = (articleUrl.trim() || articleText.trim()) && !loading;
+  // articleLengthError is part of the gate, not just a hint. Without it the
+  // button stayed enabled on a 20-character paste and the user waited out a
+  // round trip to be told by the server what the counter already said.
+  const canSubmit =
+    (articleUrl.trim() || articleText.trim()) && !loading && !articleLengthError;
 
   const handleGenerate = async () => {
     if (!canSubmit) return;
