@@ -2,13 +2,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import api from '../api/client';
 import type { Note } from '../types';
-
-const languageEmoji: Record<string, string> = {
-  spanish: '\uD83C\uDDEA\uD83C\uDDF8',
-  french: '\uD83C\uDDEB\uD83C\uDDF7',
-  japanese: '\uD83C\uDDEF\uD83C\uDDF5',
-  korean: '\uD83C\uDDF0\uD83C\uDDF7',
-};
+import { languageEnglishName, languageFlag } from '../lib/languages';
 
 export default function NotesOverview() {
   const { data, isLoading, error } = useQuery<{ notes: Note[]; total: number }>({
@@ -100,7 +94,7 @@ export default function NotesOverview() {
                     <div className="flex items-center gap-3 mt-1">
                       {note.language && (
                         <span className="text-sm text-bark-light">
-                          {languageEmoji[note.language] ?? ''} {note.language}
+                          {languageFlag(note.language)} {languageEnglishName(note.language)}
                         </span>
                       )}
                       <span className="text-bark-light/30">|</span>

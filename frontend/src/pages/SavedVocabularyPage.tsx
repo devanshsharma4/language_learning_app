@@ -3,13 +3,15 @@ import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../api/client';
 import type { SavedVocabulary } from '../types';
+import { LANGUAGES, languageFlag, languageNativeName } from '../lib/languages';
 
-const languageFilters = [
+const languageFilters: Array<{ value: string | null; label: string; flag: string }> = [
   { value: null, label: 'All', flag: '' },
-  { value: 'spanish', label: 'Espanol', flag: '\u{1F1EA}\u{1F1F8}' },
-  { value: 'french', label: 'Francais', flag: '\u{1F1EB}\u{1F1F7}' },
-  { value: 'japanese', label: '日本語', flag: '\u{1F1EF}\u{1F1F5}' },
-  { value: 'korean', label: '한국어', flag: '\u{1F1F0}\u{1F1F7}' },
+  ...LANGUAGES.map((value) => ({
+    value,
+    label: languageNativeName(value),
+    flag: languageFlag(value),
+  })),
 ];
 
 interface VocabularyResponse {

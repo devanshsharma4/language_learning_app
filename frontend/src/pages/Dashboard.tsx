@@ -1,20 +1,24 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import api from '../api/client';
 import { useAuth, AUTH_QUERY_KEY } from '../hooks/useAuth';
 import type { User } from '../types';
+import {
+  DIFFICULTIES,
+  LANGUAGES,
+  languageFlag,
+  languageNativeName,
+  isDifficulty,
+  type Difficulty,
+} from '../lib/languages';
 
-const languages = [
-  { value: 'spanish', label: 'Espanol', flag: '\u{1F1EA}\u{1F1F8}' },
-  { value: 'french', label: 'Francais', flag: '\u{1F1EB}\u{1F1F7}' },
-  { value: 'japanese', label: '\u65E5\u672C\u8A9E', flag: '\u{1F1EF}\u{1F1F5}' },
-  { value: 'korean', label: '\uD55C\uAD6D\uC5B4', flag: '\u{1F1F0}\u{1F1F7}' },
-];
-
-const DIFFICULTIES = ['beginner', 'intermediate', 'advanced'] as const;
-type Difficulty = (typeof DIFFICULTIES)[number];
+const languages = LANGUAGES.map((value) => ({
+  value,
+  label: languageNativeName(value),
+  flag: languageFlag(value),
+}));
 
 const DIFFICULTY_STORAGE_KEY = 'difficulty';
 
@@ -27,9 +31,7 @@ const ARTICLE_MAX_LENGTH = 10000;
  *  value would fail the backend's z.enum and 400 the create request. */
 function readStoredDifficulty(): Difficulty {
   const stored = localStorage.getItem(DIFFICULTY_STORAGE_KEY);
-  return DIFFICULTIES.includes(stored as Difficulty)
-    ? (stored as Difficulty)
-    : 'intermediate';
+  return isDifficulty(stored) ? stored : 'intermediate';
 }
 
 export default function Dashboard() {
@@ -42,6 +44,7 @@ export default function Dashboard() {
   const [showTextInput, setShowTextInput] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [elapsed, setElapsed] = useState(0);
 
   // Derived rather than synced with useEffect, so the saved preference is
   // correct on first paint instead of flashing a default and then correcting.
@@ -85,6 +88,34 @@ export default function Dashboard() {
   // round trip to be told by the server what the counter already said.
   const canSubmit =
     (articleUrl.trim() || articleText.trim()) && !loading && !articleLengthError;
+
+  /**
+   * Lesson creation takes ~10s of Claude calls, and on the free hosting tier a
+   * request after 15 minutes of inactivity also waits ~30-50s for the API to
+   * wake. A single static "Generating..." for a minute reads as broken, so the
+   * copy escalates with elapsed time and names the real reason once the wait
+   * stops being normal.
+   */
+  const progressMessage =
+    elapsed < 4
+      ? 'Reading your article…'
+      : elapsed < 12
+        ? 'Picking out vocabulary and writing questions…'
+        : elapsed < 25
+          ? 'Still working — four AI passes run for every lesson.'
+          : 'The free server was asleep and is waking up. First request after a quiet spell takes about a minute.';
+
+  useEffect(() => {
+    if (!loading) {
+      setElapsed(0);
+      return;
+    }
+    const started = Date.now();
+    const timer = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - started) / 1000));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [loading]);
 
   const handleGenerate = async () => {
     if (!canSubmit) return;
@@ -312,6 +343,16 @@ export default function Dashboard() {
               'Generate Lesson'
             )}
           </button>
+
+          {loading && (
+            <p
+              role="status"
+              aria-live="polite"
+              className="mt-3 text-center text-sm text-bark-light transition-opacity duration-200"
+            >
+              {progressMessage}
+            </p>
+          )}
         </div>
 
         {/* Language selector */}

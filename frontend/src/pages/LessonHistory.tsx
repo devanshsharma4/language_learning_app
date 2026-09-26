@@ -2,20 +2,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import api from '../api/client';
 import type { LessonSummary } from '../types';
-
-const languageLabels: Record<string, string> = {
-  spanish: 'Spanish',
-  french: 'French',
-  japanese: 'Japanese',
-  korean: 'Korean',
-};
-
-const languageEmoji: Record<string, string> = {
-  spanish: '\uD83C\uDDEA\uD83C\uDDF8',
-  french: '\uD83C\uDDEB\uD83C\uDDF7',
-  japanese: '\uD83C\uDDEF\uD83C\uDDF5',
-  korean: '\uD83C\uDDF0\uD83C\uDDF7',
-};
+import { languageEnglishName, languageFlag } from '../lib/languages';
 
 function ScoreBadge({ score }: { score: number }) {
   const color = score >= 70
@@ -126,7 +113,7 @@ export default function LessonHistory() {
                       </h3>
                       <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                         <span className="text-sm text-bark-light">
-                          {languageEmoji[lesson.language] ?? ''} {languageLabels[lesson.language] ?? lesson.language}
+                          {languageFlag(lesson.language)} {languageEnglishName(lesson.language)}
                         </span>
                         <span className="text-bark-light/30">|</span>
                         <span className="text-sm text-bark-light capitalize">{lesson.difficulty}</span>
