@@ -13,7 +13,13 @@ services:
     runtime: node
     plan: free
     region: oregon
-    buildCommand: npm ci && npm run build && npm run migrate
+    # --include=dev is required, not optional. NODE_ENV=production (set below)
+    # makes npm skip devDependencies, and typescript lives there -- so a plain
+    # `npm ci` builds with whatever tsc happens to be on Render's image rather
+    # than the version pinned in package-lock.json. That failed with
+    # "Option 'moduleResolution=node10' has been removed", a TypeScript 6 error
+    # this project's pinned 5.9.3 does not produce.
+    buildCommand: npm ci --include=dev && npm run build && npm run migrate
     startCommand: npm start
     # Render restarts the service if this stops returning 2xx. It runs SELECT 1,
     # so a dead database shows up as unhealthy rather than silently serving 500s.

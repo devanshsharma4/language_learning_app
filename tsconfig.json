@@ -10,7 +10,10 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "moduleResolution": "node",
+    // "node10" is the explicit name for what used to be spelled "node". Same
+    // behaviour, but the old spelling is removed in TypeScript 6 -- which is
+    // what broke the first Render build when it compiled with an unpinned tsc.
+    "moduleResolution": "node10",
     "allowSyntheticDefaultImports": true,
     "declaration": true,
     "declarationMap": true,
