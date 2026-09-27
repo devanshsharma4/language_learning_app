@@ -1,248 +1,256 @@
-# Language Learning MVP
+# Articulo
 
-AI-powered language learning application that converts real-world articles into interactive
-lessons — vocabulary extraction, comprehension questions, writing prompts, and AI feedback.
+**Learn languages from real articles.**
 
-Full-stack: an Express + TypeScript API at the repo root and a React + Vite SPA in `frontend/`.
+Paste something you actually want to read — a news story, a Wikipedia page, a blog post —
+and Articulo turns it into a lesson: the vocabulary you need, questions that check you
+understood it, writing prompts, and AI feedback on what you write back.
 
-## Features
+### → **[articulo-fawn.vercel.app](https://articulo-fawn.vercel.app)**
 
-- 🔐 JWT authentication (bcrypt hashing, 7-day tokens)
-- 🤖 Lesson generation via **Claude** (`claude-haiku-4-5`)
-- 📚 Automatic vocabulary extraction with translations, shown as inline clickable popovers
-- ❓ AI-generated comprehension questions + vocabulary multiple choice
-- ✍️ Writing prompts that scale with difficulty (1–3 prompts)
-- 💬 Detailed AI feedback: scores, grammar corrections, vocabulary suggestions
-- 📊 Lesson history with computed scores
-- 💾 Vocabulary saving
-- 📝 Per-lesson notes with debounced auto-save
+**[Try a lesson without signing up](https://articulo-fawn.vercel.app/lessons/demo)** — the
+demo is graded in your browser, no account needed.
 
-## Tech Stack
+> Hosted on free tiers. If the API has been idle for 15 minutes the first lesson takes
+> ~50 seconds to generate while the server wakes; after that it's ~8 seconds. The UI tells
+> you which is happening rather than leaving you guessing.
 
-**Backend** (repo root)
-- Node.js 20+ with TypeScript, Express 5
-- PostgreSQL via `pg` — raw SQL, no ORM
-- `@anthropic-ai/sdk` for all LLM calls
-- `@mozilla/readability` + `jsdom` (pinned to v26 — v27+ is ESM-only) for article extraction
-- JWT + bcrypt for auth, `zod` for validation
+---
 
-**Frontend** (`frontend/`)
-- React 19 + TypeScript, Vite 5
-- Tailwind CSS 3 with a custom palette
-- React Query v5, React Router v7, axios
+## Why this exists
 
-## Getting Started
+Most language apps teach from sentences written for learners. That works until you try to
+read anything real, where the vocabulary and sentence structure are nothing like the
+textbook. Articulo inverts it: you bring the text you care about, and the lesson is built
+around that.
 
-### Prerequisites
+The design consequence is that **the article is the centre of the screen**, not a quiz.
+Vocabulary is clickable inline where the word appears rather than in a separate list, so
+you learn a word in the sentence that taught it to you.
 
-1. PostgreSQL installed and running
-2. Node.js v20+
-3. An Anthropic API key (https://console.anthropic.com)
+---
 
-### Installation
+## How it works
 
-1. Install backend dependencies:
+### Generating a lesson — four AI calls, deliberately shaped
+
+```
+article ──┬─ extract vocabulary ──────┐
+          ├─ comprehension questions  │  run in parallel
+          └─ writing prompts ─────────┘
+                                      └──> vocabulary quiz (needs the words from call 1)
+```
+
+Three calls run concurrently; the fourth is sequential because it needs the extracted
+vocabulary as input. Everything merges into one `LessonQuestion[]` stored as JSONB on a
+single `lessons` row.
+
+### Grading — split on purpose
+
+- **Multiple choice is graded in code.** A direct comparison. Free, instant, and it cannot
+  hallucinate a wrong answer.
+- **Only free text goes to the LLM** — short answers and writing get scores, feedback,
+  grammar corrections, and vocabulary suggestions.
+
+Unanswered questions count as wrong rather than being ignored, so the denominator is
+"questions asked," not "questions attempted."
+
+### Question language scales with difficulty
+
+| | Comprehension & vocabulary questions | Writing prompt |
+|---|---|---|
+| beginner | **English** | target language |
+| intermediate / advanced | target language | target language |
+
+A beginner can't read a question written in the language they're learning — it tests
+decoding, not comprehension. Writing prompts stay in the target language at every level,
+because reading the prompt *is* part of that exercise. One helper (`questionLanguage()`)
+drives all of it, so the prompt templates can't drift apart.
+
+---
+
+## Notable engineering decisions
+
+**LLM output is validated at the boundary.** Every model response is parsed with a zod
+schema in `services/llm/types.ts` before anything downstream touches it, and retried with
+backoff on failure. Without this, a shape change throws a `TypeError` deep in the pipeline
+*after* three or four calls have already been paid for. Failures surface as a specific 503
+the UI can act on, not a generic 500.
+
+**Vocabulary count scales with article length.** `vocabularyTarget()` asks for roughly one
+word per 90 words of text, weighted by difficulty and clamped to 6–20. A fixed count
+over-saturates a short article and leaves a long one sparse. The model treats counts as
+suggestions, so `normalizeVocabulary()` enforces the ceiling and de-duplicates — duplicates
+matter beyond tidiness, because they generate two quiz questions on the same word.
+
+**Article extraction tries two strategies.** Mozilla's Readability (the Firefox Reader Mode
+algorithm) runs first; a regex extractor is the fallback. The regex extractor *scores*
+candidate containers and picks the best, rather than taking the first match — a first-match
+version once truncated a 31k-character page to 289 characters of navbar.
+
+**SSRF is handled properly.** `/api/lessons/create` fetches a user-supplied URL, so the
+hostname is resolved and every resulting address is checked against loopback, private,
+link-local (cloud metadata at `169.254.169.254`) and CGNAT ranges — IPv4 and IPv6, including
+decimal-encoded forms. Checking the protocol alone stops none of those.
+
+**Rate limiting is keyed on user id, not IP.** Each lesson costs four Claude calls, so the
+spend is per account. IP keying gets this backwards: it punishes users sharing a NAT and
+lets one user on many addresses spend freely.
+
+**Schema changes go through migrations.** `database/migrations/` plus a small runner that
+records what it has applied. This exists because the schema used to be applied by hand with
+`CREATE TABLE IF NOT EXISTS`, which silently does nothing against an existing table — so a
+column rename never reached the live database and every lesson submission failed for weeks.
+
+---
+
+## Stack
+
+**Backend** (repo root) — Node + TypeScript, Express 5, PostgreSQL via `pg` (raw SQL, no
+ORM), `@anthropic-ai/sdk` (`claude-haiku-4-5`), JWT + bcrypt, `zod` for validation,
+`@mozilla/readability` + `jsdom` for extraction.
+
+**Frontend** (`frontend/`) — React 19 + TypeScript, Vite, Tailwind, React Query v5,
+React Router v7, axios.
+
+**Hosting** — Vercel (static frontend, CDN) + Render (API + Postgres). Split deliberately;
+see [DEPLOYMENT.md](DEPLOYMENT.md) for why.
+
+> `jsdom` is pinned to v26. v27+ pulls in an ES Module and this backend is CommonJS, so
+> `require()` of it throws `ERR_REQUIRE_ESM` at boot.
+
+---
+
+## Running locally
+
+**Prerequisites:** Node 20+, PostgreSQL, an [Anthropic API key](https://console.anthropic.com).
+
 ```bash
 npm install
-```
-
-2. Install frontend dependencies:
-```bash
 npm install --prefix frontend
+
+createdb language_learning    # or any name, as long as DATABASE_URL matches
+cp .env.example .env          # set DATABASE_URL, JWT_SECRET (32+ chars), ANTHROPIC_API_KEY
+
+npm run migrate:dev           # applies database/migrations in order
 ```
 
-3. Set up the PostgreSQL database:
-```bash
-createdb language_learning
-```
+Then two terminals:
 
-4. Apply the schema (there is no migration runner — this is a manual step):
 ```bash
-psql -d language_learning -f database/schema.sql
-```
-
-5. Configure environment variables:
-```bash
-cp .env.example .env
-# Edit .env — JWT_SECRET must be at least 32 characters
-```
-
-6. Start both servers in separate terminals:
-```bash
-npm run dev             # API on http://localhost:3001
-npm run frontend:dev    # UI  on http://localhost:5173
+npm run dev            # API on :3001
+npm run frontend:dev   # UI  on :5173
 ```
 
 Open http://localhost:5173. Vite proxies `/api` to the backend, so the frontend needs no
-configuration of its own.
+configuration locally.
 
-> The server validates its environment at boot and exits immediately if `DATABASE_URL`,
-> `JWT_SECRET`, or `ANTHROPIC_API_KEY` are missing or malformed.
+The server validates its environment at boot and exits immediately if anything is missing or
+malformed — a bad config fails at startup, not on the first request.
 
-## API Endpoints
-
-All routes except `/health`, `/api/auth/register`, and `/api/auth/login` require an
-`Authorization: Bearer <token>` header. Responses are shaped `{ status, data }`.
-
-### Authentication
-- `POST /api/auth/register` — Create new account
-- `POST /api/auth/login` — Login
-- `GET /api/auth/me` — Get current user
-- `PUT /api/auth/language` — Update preferred language
-
-### Lessons
-- `POST /api/lessons/create` — Create lesson from article
-- `GET /api/lessons` — Get user's lessons (`limit`, `offset`)
-- `GET /api/lessons/:id` — Get lesson plus any existing response
-- `POST /api/lessons/:id/submit` — Submit lesson responses
-
-### Vocabulary
-- `POST /api/vocabulary/save` — Save vocabulary word (upsert)
-- `GET /api/vocabulary` — Get saved vocabulary (`language`, `limit`, `offset`)
-- `DELETE /api/vocabulary/:id` — Delete vocabulary word
-
-### Notes
-- `GET /api/notes` — All notes with lesson metadata
-- `GET /api/notes/lesson/:lessonId` — Notes + saved vocabulary for one lesson
-- `POST /api/notes` — Create or update the note for a lesson
-- `PUT /api/notes/:id` — Update a note
-- `DELETE /api/notes/:id` — Delete a note
-
-### Health Check
-- `GET /health` — Server status
-
-## Example API Usage
-
-### 1. Register User
-```bash
-curl -X POST http://localhost:3001/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "user@example.com",
-    "password": "securepassword123",
-    "name": "John Doe"
-  }'
-```
-
-### 2. Create Lesson
-```bash
-curl -X POST http://localhost:3001/api/lessons/create \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "language": "spanish",
-    "difficulty": "intermediate",
-    "articleText": "Your Spanish article text here (100-10000 characters)..."
-  }'
-```
-
-Pass `articleUrl` instead of `articleText` to extract from a web page. Field names are
-**camelCase** — `articleText` / `articleUrl`.
-
-### 3. Submit Lesson Response
-```bash
-curl -X POST http://localhost:3001/api/lessons/1/submit \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "mcqAnswers": [
-      { "questionId": "rc1", "selectedOption": 2 }
-    ],
-    "shortAnswerResponses": [
-      { "questionId": "sa1", "answer": "El artículo trata de..." }
-    ],
-    "writingResponses": [
-      { "promptId": "w1", "response": "Mi respuesta en español..." }
-    ]
-  }'
-```
-
-All three arrays are required (send `[]` if empty). MCQs are graded server-side by
-comparison; only short answers and writing are sent to the LLM.
-
-For a full end-to-end smoke test against a running server:
-```bash
-./test-api.sh
-```
-
-## Development Commands
+### Commands
 
 ```bash
-# Backend (repo root)
-npm run dev        # Start API with hot reload (nodemon + ts-node)
-npm run build      # Compile TypeScript to dist/
-npm start          # Start production server from dist/
-npm run lint       # Run ESLint
-npm run typecheck  # TypeScript type checking
+npm run dev            # API with hot reload
+npm run build          # compile to dist/
+npm start              # run compiled server
+npm run migrate:dev    # apply pending migrations (ts-node)
+npm run lint
+npm run typecheck
+npm run frontend:dev
+npm run frontend:build
 
-# Frontend
-npm run frontend:dev     # Start Vite dev server
-npm run frontend:build   # Type-check and build
+./test-api.sh          # end-to-end smoke test against a running server
 ```
 
-`npm test` is not configured — there is no test suite yet.
+---
 
-## Project Structure
+## API
 
+All routes except `/health` and the two auth entry points require
+`Authorization: Bearer <token>`. Responses are shaped `{ status, data }`.
+
+| Method | Route | |
+|---|---|---|
+| POST | `/api/auth/register` | Create account → user + token |
+| POST | `/api/auth/login` | → user + token |
+| GET | `/api/auth/me` | Current user |
+| PUT | `/api/auth/language` | Update preferred language |
+| POST | `/api/lessons/create` | From `articleText` or `articleUrl` (camelCase) |
+| GET | `/api/lessons` | History, `limit`/`offset`, with computed `overall_score` |
+| GET | `/api/lessons/:id` | Lesson + any existing response |
+| POST | `/api/lessons/:id/submit` | Submit answers → graded feedback |
+| POST | `/api/vocabulary/save` | Upsert a saved word |
+| GET | `/api/vocabulary` | Saved words, filterable by `language` |
+| DELETE | `/api/vocabulary/:id` | |
+| GET | `/api/notes` | All notes with lesson metadata |
+| GET | `/api/notes/lesson/:lessonId` | Notes + saved vocabulary for one lesson |
+| POST | `/api/notes` | Create or update a lesson's note (upsert) |
+| PUT/DELETE | `/api/notes/:id` | |
+| GET | `/health` | Status + a real `SELECT 1` against the database |
+
+```bash
+# Create a lesson
+curl -X POST https://articulo-api.onrender.com/api/lessons/create \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"language":"spanish","difficulty":"intermediate",
+       "articleText":"Your Spanish article text (100-10000 characters)..."}'
 ```
-/
-├── src/                # Backend
-│   ├── config/         # env.ts (Zod-validated), database.ts (pool + transaction helper)
-│   ├── middleware/     # auth.ts, errorHandler.ts
-│   ├── routes/         # auth, lessons, vocabulary, notes
-│   ├── services/
-│   │   ├── auth/       # Registration, login, tokens
-│   │   ├── llm/        # llmService.ts, prompts.ts, types.ts
-│   │   ├── article/    # URL fetch + HTML extraction
-│   │   └── lesson/     # Lesson pipeline + grading
-│   ├── types/          # models.ts
-│   └── index.ts        # Server entry point
-├── frontend/
-│   └── src/
-│       ├── components/ # lesson/ (input) and results/ (feedback)
-│       ├── pages/      # One component per route
-│       ├── api/        # axios client + interceptors
-│       └── types/      # Frontend types
-└── database/
-    └── schema.sql      # Full schema — apply manually
-```
 
-## How Lesson Generation Works
+Submission takes `mcqAnswers`, `shortAnswerResponses` and `writingResponses` — all three
+required, send `[]` if empty.
 
-Creating a lesson makes four Claude calls: vocabulary extraction, question generation, and
-writing prompts run in parallel, then vocabulary multiple-choice questions run afterward
-because they need the extracted words as input. Everything is stored as JSONB on a single
-`lessons` row.
+---
 
-On submission, multiple choice is graded deterministically in code and only short answers
-and writing responses are sent to the LLM — this keeps grading free, instant, and immune to
-hallucination.
+## Environment variables
 
-## Environment Variables
+| Variable | Required | |
+|---|---|---|
+| `DATABASE_URL` | yes | `postgres://` or `postgresql://` |
+| `JWT_SECRET` | yes | 32+ characters |
+| `ANTHROPIC_API_KEY` | yes | server-side only, never reaches the browser |
+| `CORS_ORIGIN` | production | comma-separated allowed origins |
+| `PORT` | no | default 3001 |
+| `NODE_ENV` | no | `production` enables Postgres TLS and trust-proxy |
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| DATABASE_URL | PostgreSQL connection string (must start with `postgresql://`) | Yes |
-| JWT_SECRET | Secret for JWT signing (min 32 chars) | Yes |
-| ANTHROPIC_API_KEY | Claude API key | Yes |
-| PORT | Server port (default: 3001) | No |
-| NODE_ENV | `development` \| `production` \| `test` | No |
+Frontend: `VITE_API_URL` in production only (inlined at build time). Locally the Vite proxy
+handles it.
 
-The frontend requires no environment variables — Vite proxies `/api` in development.
+---
 
-## Known Gaps
+## Known limitations
 
-- No caching or rate limiting on the AI pipeline — each lesson is four uncached Claude calls
-  behind an unthrottled endpoint, with no retry or fallback on malformed model output.
-- No test suite; `npm test` is a stub. `./test-api.sh` covers the API path manually.
-- Frontend types are hand-mirrored from the backend with nothing enforcing agreement.
-- `/lessons/demo` renders a sample lesson but cannot be submitted (`parseInt('demo')` → `NaN`).
+Honest list — these are known, not undiscovered.
 
-## Next Steps
+- **No caching of AI responses.** The same article reprocessed costs four fresh calls.
+  Should be keyed on (article hash, language, difficulty). This is the single biggest
+  remaining cost win — see [docs/SCALE.md](docs/SCALE.md).
+- **No test suite.** `npm test` is a stub; `./test-api.sh` covers the API path manually.
+  Coverage should start with LLM output validation and the auth flow.
+- **Frontend types are hand-mirrored** from `src/types/models.ts` with nothing enforcing
+  agreement. This already caused one bug.
+- **Vocabulary can be a lemma the article never spells.** The model returns `aimer` where
+  the text has `aimait`, so that entry never highlights. Needs lemmatisation.
+- **Accessibility is incomplete.** Keyboard focus and MCQ semantics are fixed; a full pass
+  (labels, live regions, the vocabulary popover as a real dialog) is in progress.
+- **Not responsive yet.** Desktop-first; a mobile pass is the current work.
 
-1. Implement a caching layer for LLM responses
-2. Add rate limiting to `POST /api/lessons/create`
-3. Add retry / graceful degradation for LLM failures
-4. Add a test suite (`npm test` is currently a stub)
-5. Set up monitoring and error tracking
-6. Deploy to production (Railway/Render recommended)
+[docs/SCALE.md](docs/SCALE.md) covers what breaks at 10k users in more depth — query costs,
+bundle size, where the N+1s are, and what I'd fix in what order.
+
+---
+
+## On AI-assisted development
+
+This was built with heavy use of AI coding tools, which I'd rather state plainly than have
+inferred. What I think that changes, and doesn't:
+
+It made the volume of code possible in the time available. It did not make the decisions —
+the split grading, the per-difficulty question language, keying rate limits on user id, the
+choice to deploy frontend and API separately to keep cold starts off the critical path.
+Those came from thinking about what the product needed and what the failure modes were.
+
+It also produced bugs I had to find by using the app: a scoring scale mismatch that rendered
+every result as a number over 100%, a schema drift that made submission fail silently, and a
+vocabulary quiz that printed its own answer under every question. All three were found by
+sitting down and working through the app as a user, which is the part no tool did for me.
