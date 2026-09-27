@@ -33,10 +33,19 @@ export const env = envResult.data;
 
 export const isProduction = env.NODE_ENV === 'production';
 
-/** Parsed allowlist of browser origins. Empty means same-origin only. */
+/**
+ * Parsed allowlist of browser origins. Empty means same-origin only.
+ *
+ * Trailing slashes are stripped because an origin never has one: a browser sends
+ * `Origin: https://example.com`, so an allowlist entry of
+ * `https://example.com/` -- which is what you get from copying the URL out of a
+ * browser address bar -- silently matches nothing. The failure looks exactly
+ * like a missing config while the variable is plainly set, so it is worth
+ * normalising rather than documenting.
+ */
 export const corsOrigins: string[] = (env.CORS_ORIGIN ?? '')
   .split(',')
-  .map((origin) => origin.trim())
+  .map((origin) => origin.trim().replace(/\/+$/, ''))
   .filter(Boolean);
 
 if (isProduction && corsOrigins.length === 0) {
