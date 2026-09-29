@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Articulo — direction 1: Reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..600&family=IBM+Plex+Sans+Condensed:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet" />
+<style>
+  /* ── Direction 1: REFERENCE ──────────────────────────────────────────────
+     Grounded in bilingual dictionaries and pocket phrasebooks.
+     Vocabulary is set as real lexicographic entries: italic part of speech,
+     sense numbering, a gloss column beside the text rather than under it. */
+
+  :root {
+    --paper:  #FCFCFA;
+    --ink:    #101014;
+    --ink-2:  #55555F;
+    --blue:   #1B4DB1;   /* reference blue: links, senses, active state */
+    --marker: #FFE45C;   /* marker yellow: the word you are looking at */
+    --rule:   #DEDED6;
+    --sheet:  #F2F2EC;
+
+    --measure: 64ch;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Newsreader", Georgia, serif;
+    font-size: 19px;
+    line-height: 1.62;               /* serif body wants the extra leading */
+    font-optical-sizing: auto;
+  }
+
+  /* ── Masthead ─────────────────────────────────────────────────────────── */
+
+  header {
+    border-bottom: 1px solid var(--rule);
+    padding: 18px 32px;
+    display: flex;
+    align-items: baseline;
+    gap: 20px;
+  }
+
+  .wordmark {
+    font-size: 21px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+
+  /* Language tabs, borrowed from a dictionary's thumb index: the colour band
+     tells you which half of the book you are in. */
+  .tabs { display: flex; gap: 2px; margin-left: auto; }
+
+  .tab {
+    font-family: "IBM Plex Sans Condensed", system-ui, sans-serif;
+    font-size: 13px;
+    padding: 5px 13px 4px;
+    border: 1px solid var(--rule);
+    border-bottom: none;
+    background: var(--sheet);
+    color: var(--ink-2);
+    position: relative;
+    top: 1px;
+  }
+  .tab[aria-current="true"] {
+    background: var(--paper);
+    color: var(--ink);
+    box-shadow: inset 0 3px 0 var(--blue);
+  }
+
+  /* ── Two-column reading layout ────────────────────────────────────────── */
+
+  .spread {
+    display: grid;
+    grid-template-columns: minmax(0, var(--measure)) 21rem;
+    gap: 0 3.5rem;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 44px 32px 96px;
+  }
+
+  .title {
+    font-size: clamp(30px, 4.4vw, 42px);
+    line-height: 1.12;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    margin: 0 0 6px;
+  }
+
+  /* Publication line, set like a dictionary's source citation. */
+  .cite {
+    font-family: "IBM Plex Sans Condensed", system-ui, sans-serif;
+    font-size: 13px;
+    color: var(--ink-2);
+    margin-bottom: 34px;
+  }
+  .cite em { font-style: italic; }
+
+  article p { margin: 0 0 1.15em; }
+
+  /* ── The gloss ─────────────────────────────────────────────────────────
+     A marked word is not a button with a border; it is a word with a marker
+     stroke under it, the way you would mark a page you were reading. */
+
+  .gloss {
+    font: inherit;
+    background: none;
+    border: 0;
+    padding: 0 1px;
+    color: inherit;
+    cursor: pointer;
+    box-shadow: inset 0 -0.42em 0 var(--marker);
+    transition: box-shadow 120ms ease;
+  }
+  .gloss:hover,
+  .gloss:focus-visible { box-shadow: inset 0 -1.05em 0 var(--marker); }
+  .gloss:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .gloss[aria-current="true"] { box-shadow: inset 0 -1.05em 0 var(--marker); }
+
+  /* ── Gloss column ─────────────────────────────────────────────────────── */
+
+  aside {
+    font-family: "IBM Plex Sans Condensed", system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    border-left: 1px solid var(--rule);
+    padding-left: 1.9rem;
+    align-self: start;
+    position: sticky;
+    top: 28px;
+  }
+
+  .entry { padding: 13px 0; border-bottom: 1px solid var(--rule); }
+  .entry:first-of-type { padding-top: 0; }
+
+  .headword {
+    font-family: "Newsreader", Georgia, serif;
+    font-size: 20px;
+    font-weight: 600;
+  }
+  /* Part of speech in italic, the universal dictionary convention. */
+  .pos { font-style: italic; color: var(--ink-2); margin-left: 6px; font-size: 14px; }
+  .sense { display: block; margin-top: 2px; }
+  .sense b { font-weight: 600; color: var(--blue); margin-right: 5px; }
+  .usage {
+    display: block;
+    margin-top: 5px;
+    color: var(--ink-2);
+    font-style: italic;
+    font-size: 14px;
+  }
+
+  .aside-head {
+    font-family: "IBM Plex Sans Condensed", system-ui, sans-serif;
+    font-size: 13px;
+    color: var(--ink-2);
+    margin-bottom: 14px;
+  }
+
+  /* ── Questions ────────────────────────────────────────────────────────── */
+
+  .exercises { grid-column: 1 / 2; margin-top: 56px; }
+
+  .rule-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    border-top: 2px solid var(--ink);
+    padding-top: 10px;
+    margin-bottom: 26px;
+  }
+  .rule-head h2 { font-size: 22px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .rule-head span {
+    font-family: "IBM Plex Sans Condensed", system-ui, sans-serif;
+    font-size: 13px;
+    color: var(--ink-2);
+    margin-left: auto;
+  }
+
+  .q { margin-bottom: 30px; }
+  .q > p { margin: 0 0 12px; font-size: 19px; }
+  .q-num { color: var(--blue); font-weight: 600; margin-right: 8px; }
+
+  .opts { display: grid; gap: 6px; }
+
+  .opt {
+    display: flex;
+    gap: 12px;
+    align-items: baseline;
+    padding: 9px 13px;
+    border: 1px solid var(--rule);
+    background: var(--paper);
+    font: inherit;
+    font-size: 17px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .opt:hover { border-color: var(--ink-2); }
+  .opt:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+  .opt[aria-checked="true"] { border-color: var(--blue); box-shadow: inset 3px 0 0 var(--blue); }
+
+  .key {
+    font-family: "IBM Plex Sans Condensed", system-ui, sans-serif;
+    font-size: 12px;
+    color: var(--ink-2);
+    border: 1px solid var(--rule);
+    padding: 1px 6px;
+    flex: none;
+  }
+  .opt[aria-checked="true"] .key { background: var(--blue); border-color: var(--blue); color: #fff; }
+
+  .submit {
+    font-family: "IBM Plex Sans Condensed", system-ui, sans-serif;
+    font-size: 16px;
+    font-weight: 500;
+    background: var(--ink);
+    color: var(--paper);
+    border: 0;
+    padding: 13px 26px;
+    cursor: pointer;
+    margin-top: 12px;
+  }
+  .submit:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+  /* Desktop-only by decision. The gloss column is the layout: at narrow widths
+     it would have to collapse under the article, which breaks the whole idea of
+     reading text and gloss side by side. Keeps the window from breaking outright
+     on a small laptop, without pretending to be a mobile design. */
+  @media (max-width: 1000px) {
+    .spread { grid-template-columns: minmax(0, 1fr) 17rem; gap: 0 2rem; padding: 36px 24px 80px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="wordmark">Articulo</span>
+  <nav class="tabs" aria-label="Language">
+    <span class="tab" aria-current="true">Français</span>
+    <span class="tab">Español</span>
+    <span class="tab">日本語</span>
+    <span class="tab">한국어</span>
+  </nav>
+</header>
+
+<div class="spread">
+  <main>
+    <h1 class="title">Les villes du futur</h1>
+    <p class="cite">From <em>lemonde.fr</em> · 412 words · Beginner · 7 words glossed</p>
+
+    <article>
+      <p>Les villes du futur promettent d'être des lieux fascinants où la technologie et la
+      nature <button class="gloss" aria-current="true">cohabitent</button> en harmonie. Les
+      bâtiments intelligents régulent leur propre consommation d'énergie, tandis que les
+      jardins verticaux recouvrent les
+      <button class="gloss">façades</button>, purifiant l'air et fournissant des aliments
+      frais aux habitants.</p>
+
+      <p>Les transports en commun seront entièrement électriques et autonomes. Les citoyens
+      pourront <button class="gloss">se déplacer</button> sans se soucier des embouteillages
+      ni de la pollution. Le <button class="gloss">gaspillage</button> alimentaire sera
+      réduit grâce à des systèmes de distribution intelligents.</p>
+
+      <p>La <button class="gloss">durabilité</button> est le pilier fondamental de ces
+      villes. Les politiques publiques <button class="gloss">favoriseront</button> les
+      énergies renouvelables, et un mode de vie écologique sera enfin
+      <button class="gloss">à la portée</button> de tous.</p>
+    </article>
+
+    <section class="exercises">
+      <div class="rule-head">
+        <h2>Comprehension</h2>
+        <span>Press A–D to answer</span>
+      </div>
+
+      <div class="q">
+        <p><span class="q-num">1</span>What role do vertical gardens play in the cities of the future?</p>
+        <div class="opts" role="radiogroup" aria-label="Question 1">
+          <button class="opt" role="radio" aria-checked="false"><span class="key">A</span>They generate electricity for the buildings.</button>
+          <button class="opt" role="radio" aria-checked="true"><span class="key">B</span>They clean the air and grow fresh food.</button>
+          <button class="opt" role="radio" aria-checked="false"><span class="key">C</span>They reduce noise from the street below.</button>
+          <button class="opt" role="radio" aria-checked="false"><span class="key">D</span>They replace public parks entirely.</button>
+        </div>
+      </div>
+
+      <div class="q">
+        <p><span class="q-num">2</span>How will public transportation change in future cities?</p>
+        <div class="opts" role="radiogroup" aria-label="Question 2">
+          <button class="opt" role="radio" aria-checked="false"><span class="key">A</span>It will run only during peak hours.</button>
+          <button class="opt" role="radio" aria-checked="false"><span class="key">B</span>It will be privately owned.</button>
+          <button class="opt" role="radio" aria-checked="false"><span class="key">C</span>It will become fully electric and self-driving.</button>
+          <button class="opt" role="radio" aria-checked="false"><span class="key">D</span>It will be limited to city centres.</button>
+        </div>
+      </div>
+
+      <button class="submit">Check answers</button>
+    </section>
+  </main>
+
+  <aside aria-label="Glossary">
+    <p class="aside-head">Words in this article</p>
+
+    <div class="entry">
+      <span class="headword">cohabiter</span><span class="pos">v.</span>
+      <span class="sense"><b>1.</b> to coexist, to live alongside</span>
+      <span class="usage">…la technologie et la nature cohabitent en harmonie.</span>
+    </div>
+
+    <div class="entry">
+      <span class="headword">façade</span><span class="pos">n.f.</span>
+      <span class="sense"><b>1.</b> the front of a building</span>
+    </div>
+
+    <div class="entry">
+      <span class="headword">se déplacer</span><span class="pos">v. pron.</span>
+      <span class="sense"><b>1.</b> to get around, to commute</span>
+    </div>
+
+    <div class="entry">
+      <span class="headword">gaspillage</span><span class="pos">n.m.</span>
+      <span class="sense"><b>1.</b> waste, squandering</span>
+    </div>
+
+    <div class="entry">
+      <span class="headword">durabilité</span><span class="pos">n.f.</span>
+      <span class="sense"><b>1.</b> sustainability</span>
+    </div>
+  </aside>
+</div>
+
+</body>
+</html>
