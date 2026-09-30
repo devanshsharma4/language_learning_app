@@ -9,7 +9,14 @@ export interface User {
 }
 
 export interface VocabularyItem {
+  /** The dictionary/base form. This is what the definition card headlines. */
   word: string;
+  /**
+   * The form as it actually appears in the article ("désolée" where `word` is
+   * "désolé"). Optional: lessons created before the prompt asked for it have
+   * only `word`, and the reader falls back to matching on that.
+   */
+  surfaceForm?: string;
   translation: string;
   explanation: string;
   example?: string;
@@ -55,6 +62,10 @@ export interface Lesson {
   language: 'spanish' | 'french' | 'japanese' | 'korean';
   difficulty: 'beginner' | 'intermediate' | 'advanced';
   article_title?: string;
+  /** Short English headline, always model-generated. Shown above the article
+   *  card so a learner knows the subject before reading it in the target
+   *  language. */
+  article_title_english?: string;
   article_text: string;
   article_url?: string;
   vocabulary: VocabularyItem[];
@@ -135,6 +146,9 @@ export interface SavedVocabulary {
   translation?: string;
   explanation?: string;
   context?: string;
+  /** Normalized to noun | verb | adjective | adverb | other by the client.
+   *  Null on rows saved before it was captured. */
+  part_of_speech?: string | null;
   language: string;
   created_at: Date;
 }

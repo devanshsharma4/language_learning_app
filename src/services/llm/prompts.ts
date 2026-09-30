@@ -5,11 +5,23 @@ export const VOCAB_MAX = 20;
 /** Roughly one vocabulary word per this many words of article text. */
 const WORDS_PER_VOCAB_ITEM = 90;
 
-/** Beginners get a lighter load at the same article length; advanced a denser one. */
+/**
+ * Beginners get MORE glossed words at the same article length, not fewer.
+ *
+ * This used to run the other way, on the assumption that a beginner is more
+ * easily overwhelmed. That had it backwards: the vocabulary list is the help,
+ * and a beginner meets more unfamiliar words in the same text than an advanced
+ * reader does. Weighting them down left the reader who needed the most support
+ * with the least of it, and left genuinely unknown words unmarked and
+ * unexplained.
+ *
+ * An advanced reader wants the opposite — only the words that are actually
+ * worth stopping for, since most of the text is already legible to them.
+ */
 const DIFFICULTY_WEIGHT: Record<string, number> = {
-  beginner: 0.8,
+  beginner: 1.2,
   intermediate: 1.0,
-  advanced: 1.2,
+  advanced: 0.8,
 };
 
 /**
@@ -70,22 +82,31 @@ export const promptTemplates = {
       two forms of the same lemma (e.g. both "oiseau" and "oiseaux").
 
     For each word, provide:
-    - word: The word as it appears in the text
+    - word: The dictionary (base) form — masculine singular for adjectives,
+      infinitive for verbs, singular for nouns
+    - surfaceForm: The exact substring as it appears in the text, copied
+      character for character. If the text uses the base form unchanged, repeat
+      it here. This MUST occur verbatim in the text above — it is used to find
+      and highlight the word, and an invented form silently fails to match.
     - translation: English translation
-    - partOfSpeech: noun, verb, adjective, adverb, etc.
+    - partOfSpeech: exactly one of: noun, verb, adjective, adverb, other
     - explanation: Brief explanation in simple English (max 20 words)
     - example: A simple example sentence using this word (optional)
 
-    Also provide a "title" for this text: a short descriptive headline of at most
-    8 words, written in ENGLISH, describing what the text is about. This is used
-    to label the lesson in the learner's history.
+    Also provide two headlines for this text, each at most 8 words:
+    - title: in ENGLISH, describing what the text is about. This orients a
+      learner before they read it in ${language}.
+    - titleInLanguage: the same headline written in ${language}. If the text
+      already opens with its own headline, use that instead of inventing one.
 
     Return a JSON object with structure:
     {
       "title": "string",
+      "titleInLanguage": "string",
       "vocabulary": [
         {
           "word": "string",
+          "surfaceForm": "string",
           "translation": "string",
           "partOfSpeech": "string",
           "explanation": "string",
@@ -246,6 +267,7 @@ export const promptTemplates = {
     ${shortAnswerQuestions.map((q) => {
       const response = shortAnswerResponses.find((r) => r.questionId === q.id);
       return `
+        questionId: ${q.id}
         Question: ${q.question}
         Expected Guidance: ${q.expectedAnswerGuidance || ''}
         Student's Answer: ${response?.answer || 'No answer provided'}
@@ -256,11 +278,17 @@ export const promptTemplates = {
     ${writingPrompts.map((p) => {
       const response = writingResponses.find((r) => r.promptId === p.id);
       return `
+        promptId: ${p.id}
         Prompt: ${p.prompt}
         Word Limit: ${p.minWords}-${p.maxWords} words
         Student's Response: ${response?.response || 'No response provided'}
       `;
     }).join('\n')}
+
+    ID REQUIREMENT (strict): copy the questionId and promptId values above
+    verbatim into your response, one evaluation per question and per prompt, in
+    the same order. They are how each piece of feedback is matched back to the
+    question it is about. Do not invent ids such as "question_1".
 
     Provide constructive feedback that:
     - Evaluates each short answer for comprehension accuracy (score 0-10)

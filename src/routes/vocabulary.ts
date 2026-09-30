@@ -8,11 +8,21 @@ import { SavedVocabulary } from '../types/models';
 
 const router = Router();
 
+/**
+ * `partOfSpeech` is constrained to the five buckets the UI colours by, rather
+ * than passed through as free text. The model produces everything from "nm" to
+ * "verbe" to "reflexive verb"; the client normalizes before sending, and this
+ * enum is what stops an un-normalized value reaching the column and quietly
+ * breaking the filter counts.
+ */
+const PARTS_OF_SPEECH = ['noun', 'verb', 'adjective', 'adverb', 'other'] as const;
+
 const saveVocabularySchema = z.object({
   word: z.string(),
   translation: z.string().optional(),
   explanation: z.string().optional(),
   context: z.string().optional(),
+  partOfSpeech: z.enum(PARTS_OF_SPEECH).optional(),
   language: z.string(),
   lessonId: z.number().optional()
 });
@@ -30,19 +40,25 @@ router.post('/save', authenticate, async (req: AuthRequest, res, next) => {
       throw new AppError(400, 'Invalid input data');
     }
 
-    const { word, translation, explanation, context, language, lessonId } = validation.data;
+    const { word, translation, explanation, context, partOfSpeech, language, lessonId } =
+      validation.data;
 
     const result = await query<SavedVocabulary>(
       `INSERT INTO saved_vocabulary (
-        user_id, lesson_id, word, translation, explanation, context, language
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-      ON CONFLICT (user_id, word, language) 
-      DO UPDATE SET 
+        user_id, lesson_id, word, translation, explanation, context,
+        part_of_speech, language
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      ON CONFLICT (user_id, word, language)
+      DO UPDATE SET
         translation = COALESCE($4, saved_vocabulary.translation),
         explanation = COALESCE($5, saved_vocabulary.explanation),
-        context = COALESCE($6, saved_vocabulary.context)
+        context = COALESCE($6, saved_vocabulary.context),
+        -- COALESCE keeps the stored value when the client sends nothing, so
+        -- re-saving a word from an older lesson cannot erase a part of speech
+        -- that a newer one supplied.
+        part_of_speech = COALESCE($7, saved_vocabulary.part_of_speech)
       RETURNING *`,
-      [req.user.userId, lessonId, word, translation, explanation, context, language]
+      [req.user.userId, lessonId, word, translation, explanation, context, partOfSpeech, language]
     );
 
     res.json({

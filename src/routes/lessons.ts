@@ -166,4 +166,42 @@ router.post('/:id/submit', authenticate, submissionLimiter, async (req: AuthRequ
   }
 });
 
+/**
+ * Delete a lesson.
+ *
+ * The `user_id` filter is the authorization: a lesson belonging to someone else
+ * matches zero rows and reports 404, which is also the honest answer — it does
+ * not exist as far as this user is concerned, and distinguishing "not yours"
+ * from "not there" would leak which ids are real.
+ *
+ * Dependent rows are handled by the schema rather than here. `lesson_responses`
+ * and `notes` cascade, because a submission and a lesson note are meaningless
+ * without the lesson. `saved_vocabulary.lesson_id` is ON DELETE SET NULL on
+ * purpose: a word you saved is yours, and deleting the lesson you met it in
+ * should not take it out of your collection.
+ */
+router.delete('/:id', authenticate, async (req: AuthRequest, res, next) => {
+  try {
+    if (!req.user) {
+      throw new AppError(401, 'Not authenticated');
+    }
+
+    const lessonId = parseInt(req.params.id as string);
+
+    if (isNaN(lessonId)) {
+      throw new AppError(400, 'Invalid lesson ID');
+    }
+
+    const deleted = await lessonService.deleteLesson(lessonId, req.user.userId);
+
+    if (!deleted) {
+      throw new AppError(404, 'Lesson not found');
+    }
+
+    res.json({ status: 'success', data: { id: lessonId } });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export { router as lessonsRouter };

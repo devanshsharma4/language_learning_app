@@ -96,4 +96,16 @@ curl -s -X DELETE "$BASE/api/vocabulary/$VOCAB_ID" -H "Authorization: Bearer $TO
 echo ""
 echo ""
 
+# Saved words survive their lesson on purpose (saved_vocabulary.lesson_id is
+# ON DELETE SET NULL), so this saves a second word first and checks it is still
+# there afterwards. A second DELETE must 404 -- the ownership filter and the
+# "already gone" case return the same status.
+echo "=== 11. Save a word, then delete its lesson ==="
+curl -s -X POST $BASE/api/vocabulary/save -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+  -d "{\"word\":\"chimenea\",\"translation\":\"fireplace\",\"partOfSpeech\":\"noun\",\"language\":\"spanish\",\"lessonId\":$LESSON_ID}" > /dev/null
+echo "delete lesson $LESSON_ID -> $(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$BASE/api/lessons/$LESSON_ID" -H "Authorization: Bearer $TOKEN")"
+echo "delete again (expect 404) -> $(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$BASE/api/lessons/$LESSON_ID" -H "Authorization: Bearer $TOKEN")"
+echo "words still saved -> $(curl -s "$BASE/api/vocabulary" -H "Authorization: Bearer $TOKEN" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["total"])')"
+echo ""
+
 echo "=== Done! ==="

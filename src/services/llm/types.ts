@@ -22,10 +22,16 @@ export const vocabularyExtractionSchema = z.object({
   // Optional: pre-existing lessons were generated before the prompt asked for a
   // title, and a URL-sourced article already has one from its <title> tag.
   title: z.string().trim().min(1).optional(),
+  /** The same headline in the target language. Heads the article card. */
+  titleInLanguage: z.string().trim().min(1).optional(),
   vocabulary: z
     .array(
       z.object({
         word: nonEmptyString,
+        // Optional because models comply with it inconsistently; when it is
+        // missing the reader falls back to matching `word` directly, which is
+        // exactly the pre-existing behaviour.
+        surfaceForm: z.string().trim().min(1).optional(),
         translation: z.string().default(''),
         explanation: z.string().default(''),
         partOfSpeech: z.string().optional(),

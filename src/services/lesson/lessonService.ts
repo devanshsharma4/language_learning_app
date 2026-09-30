@@ -108,14 +108,29 @@ export class LessonService {
     // lesson is guaranteed to satisfy the quota.
     const vocabulary = this.normalizeVocabulary(
       vocabularyResult.vocabulary,
-      vocabularyTarget(articleText, difficulty)
+      vocabularyTarget(articleText, difficulty),
+      articleText
     );
 
-    // Pasted text has no <title> to scrape, so every pasted lesson showed as
-    // "Untitled Article" in the history list. The vocabulary call already receives
-    // the full article, so asking it for a headline costs no extra request.
-    // A scraped title still wins -- it is the author's own.
-    articleTitle = truncateTitle(articleTitle) ?? truncateTitle(vocabularyResult.title);
+    // Two titles are kept, because they do different jobs on the lesson page.
+    //
+    // `article_title` is the article's own headline, in the target language --
+    // the scraped <title> when there is one, otherwise the model's. It heads
+    // the article card.
+    //
+    // `article_title_english` always holds the model's English headline. It
+    // sits above the card so a learner knows the subject before reading it in
+    // a language they are still learning. Previously the English title was
+    // generated on every lesson and then discarded whenever a scraped title
+    // won, which paid for it and threw it away.
+    const englishTitle = truncateTitle(vocabularyResult.title);
+    // Scraped headline first -- it is the author's own. Failing that the model's
+    // target-language headline, so a pasted lesson still gets a title in the
+    // language being learned rather than an English one standing in for it.
+    articleTitle =
+      truncateTitle(articleTitle) ??
+      truncateTitle(vocabularyResult.titleInLanguage) ??
+      englishTitle;
 
     // Step 2: Generate vocab MCQs (needs vocabulary output from step 1)
     const vocabQuestionsResult = await llmService.generateVocabQuestions(
@@ -144,15 +159,16 @@ export class LessonService {
     const lesson = await transaction(async (client) => {
       const result = await client.query(
         `INSERT INTO lessons (
-          user_id, language, difficulty, article_title, article_text, article_url,
-          vocabulary, questions, writing_prompts
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          user_id, language, difficulty, article_title, article_title_english,
+          article_text, article_url, vocabulary, questions, writing_prompts
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING *`,
         [
           userId,
           language,
           difficulty,
           articleTitle,
+          englishTitle,
           articleText,
           articleUrl,
           JSON.stringify(vocabulary),
@@ -178,6 +194,23 @@ export class LessonService {
     }
 
     return this.formatLesson(lessons[0]);
+  }
+
+  /**
+   * Deletes one lesson, returning whether it existed and belonged to the caller.
+   *
+   * The `user_id` predicate is the ownership check -- the same pattern every
+   * other query here uses -- so there is no read-then-delete window in which the
+   * row could change hands. `RETURNING id` is what distinguishes "deleted" from
+   * "matched nothing"; the route turns the latter into a 404.
+   */
+  async deleteLesson(lessonId: number, userId: number): Promise<boolean> {
+    const deleted = await query<{ id: number }>(
+      'DELETE FROM lessons WHERE id = $1 AND user_id = $2 RETURNING id',
+      [lessonId, userId]
+    );
+
+    return deleted.length > 0;
   }
 
   async getUserLessons(
@@ -273,21 +306,50 @@ export class LessonService {
       };
     });
 
-    // Get short answer questions for AI feedback
     const shortAnswerQuestions = lesson.questions.filter(
       (q): q is Extract<LessonQuestion, { type: 'short_answer' }> =>
         q.type === 'short_answer'
     );
 
-    // Generate AI feedback only for short answers and writing
-    const aiFeedback = await llmService.generateFeedback(
-      lesson.article_text,
-      shortAnswerQuestions,
-      shortAnswerResponses,
-      lesson.writing_prompts,
-      writingResponses,
-      lesson.language
+    /*
+     * Only what was actually attempted goes to the model.
+     *
+     * A prompt left blank used to be sent anyway, marked "No response
+     * provided". The model dutifully scored it 0/10 with feedback telling the
+     * learner to complete it -- and that zero was then averaged into the
+     * overall score, so skipping a prompt was punished exactly as hard as
+     * writing something wrong. Unattempted is not the same as bad, and the
+     * score should describe the work that exists.
+     *
+     * It also stops us paying for tokens to evaluate an empty string.
+     */
+    const attemptedShortAnswers = shortAnswerQuestions.filter((question) =>
+      shortAnswerResponses.some(r => r.questionId === question.id && r.answer?.trim())
     );
+    const attemptedPrompts = lesson.writing_prompts.filter((prompt) =>
+      writingResponses.some(r => r.promptId === prompt.id && r.response?.trim())
+    );
+
+    // Skip the call entirely when there is no free text at all -- an all-MCQ
+    // submission needs no model pass, and asking for feedback on nothing
+    // produced invented corrections.
+    const aiFeedback =
+      attemptedShortAnswers.length > 0 || attemptedPrompts.length > 0
+        ? await llmService.generateFeedback(
+            lesson.article_text,
+            attemptedShortAnswers,
+            shortAnswerResponses,
+            attemptedPrompts,
+            writingResponses,
+            lesson.language
+          )
+        : {
+            short_answer_evaluation: [],
+            writing_evaluation: [],
+            grammar_corrections: [],
+            vocabulary_suggestions: [],
+            overall_feedback: ''
+          };
 
     // Combine MCQ results with AI feedback. Scores are clamped on the way in so
     // a model that ignores the 0-10 instruction cannot poison stored feedback --
@@ -296,14 +358,18 @@ export class LessonService {
     const fullFeedback = {
       mcq_results: mcqResults,
       ...aiFeedback,
-      short_answer_evaluation: aiFeedback.short_answer_evaluation?.map(e => ({
-        ...e,
-        score: clampScore(e.score)
-      })) ?? [],
-      writing_evaluation: aiFeedback.writing_evaluation?.map(e => ({
-        ...e,
-        score: clampScore(e.score)
-      })) ?? []
+      // Realigned against the attempted ids, since those are the only ones the
+      // model was shown and the only ones it can be returning feedback for.
+      short_answer_evaluation: this.realignIds(
+        aiFeedback.short_answer_evaluation,
+        attemptedShortAnswers.map(q => q.id),
+        'questionId'
+      ).map(e => ({ ...e, score: clampScore(e.score) })),
+      writing_evaluation: this.realignIds(
+        aiFeedback.writing_evaluation,
+        attemptedPrompts.map(p => p.id),
+        'promptId'
+      ).map(e => ({ ...e, score: clampScore(e.score) }))
     };
 
     // Save response to database
@@ -362,19 +428,65 @@ export class LessonService {
    * word, so a repeated entry produces a vocabulary MCQ testing the same term
    * twice.
    */
+  /**
+   * Puts the real question/prompt ids back on model-generated feedback.
+   *
+   * The feedback prompt now states the ids and requires them echoed back, but a
+   * model under no schema constraint returned "question_1" and "prompt_1"
+   * regardless -- and every consumer joins feedback to its question by id
+   * (`questions.find(q => q.id === evaluation.questionId)`). When that join
+   * failed the results page rendered a score and a paragraph of feedback with
+   * no question above it and no answer below it, which is unreadable and looks
+   * like data loss.
+   *
+   * An id the lesson actually contains is trusted. Anything else is replaced by
+   * position: the model is asked for one evaluation per question in order, and
+   * order is the only other thing linking them. Extra evaluations beyond the
+   * number of questions are dropped rather than given a wrong id.
+   */
+  private realignIds<K extends string, T extends Record<K, string>>(
+    evaluations: T[] | undefined,
+    validIds: string[],
+    key: K
+  ): T[] {
+    if (!evaluations) return [];
+
+    const known = new Set(validIds);
+
+    return evaluations
+      .map((evaluation, index) => {
+        if (known.has(evaluation[key])) return evaluation;
+        const fallback = validIds[index];
+        return fallback ? { ...evaluation, [key]: fallback } : null;
+      })
+      .filter((evaluation): evaluation is T => evaluation !== null);
+  }
+
   private normalizeVocabulary(
     items: VocabularyItem[],
-    target: number
+    target: number,
+    articleText: string
   ): VocabularyItem[] {
     const seen = new Set<string>();
     const unique: VocabularyItem[] = [];
+    const haystack = articleText.toLowerCase();
 
     for (const item of items) {
       const key = item.word?.trim().toLowerCase();
       if (!key || seen.has(key)) continue;
 
       seen.add(key);
-      unique.push(item);
+
+      // A surface form is only useful if it is really in the article -- it
+      // exists so the reader can find and highlight the word. Models sometimes
+      // return a plausible inflection that never occurs in the text, which
+      // would highlight nothing at all; drop those and fall back to `word`,
+      // which is the behaviour from before surface forms existed.
+      const surfaceForm = item.surfaceForm?.trim();
+      const usableSurfaceForm =
+        surfaceForm && haystack.includes(surfaceForm.toLowerCase()) ? surfaceForm : undefined;
+
+      unique.push({ ...item, surfaceForm: usableSurfaceForm });
     }
 
     return unique.slice(0, target);
@@ -387,6 +499,7 @@ export class LessonService {
       language: row.language,
       difficulty: row.difficulty,
       article_title: row.article_title,
+      article_title_english: row.article_title_english,
       article_text: row.article_text,
       article_url: row.article_url,
       vocabulary: row.vocabulary,
