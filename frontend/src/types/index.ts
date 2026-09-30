@@ -13,6 +13,9 @@ export interface Lesson {
   language: string;
   difficulty: 'beginner' | 'intermediate' | 'advanced';
   article_title?: string;
+  /** Short English headline, always model-generated. Absent on lessons created
+   *  before it was stored. */
+  article_title_english?: string;
   article_text: string;
   article_url?: string;
   vocabulary: VocabularyItem[];
@@ -22,7 +25,15 @@ export interface Lesson {
 }
 
 export interface VocabularyItem {
+  /** The dictionary/base form — what the definition card headlines. */
   word: string;
+  /**
+   * The form as it appears in the article ("désolée" where `word` is
+   * "désolé"). Absent on lessons created before the prompt asked for it, and
+   * dropped server-side when it does not actually occur in the text, so the
+   * reader falls back to matching `word`.
+   */
+  surfaceForm?: string;
   translation: string;
   explanation: string;
   context: string;
@@ -119,6 +130,9 @@ export interface SavedVocabulary {
   translation?: string | null;
   explanation?: string | null;
   context?: string | null;
+  /** noun | verb | adjective | adverb | other. Null on words saved before it
+   *  was captured; the UI normalizes that to "other" at render time. */
+  part_of_speech?: string | null;
   language: string;
   created_at: string;
 }
@@ -128,6 +142,7 @@ export interface LessonSummary {
   language: string;
   difficulty: 'beginner' | 'intermediate' | 'advanced';
   article_title?: string;
+  article_title_english?: string;
   article_url?: string;
   created_at: string;
   completed: boolean;

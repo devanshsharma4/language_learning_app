@@ -52,8 +52,13 @@ single `lessons` row.
 - **Only free text goes to the LLM** — short answers and writing get scores, feedback,
   grammar corrections, and vocabulary suggestions.
 
-Unanswered questions count as wrong rather than being ignored, so the denominator is
-"questions asked," not "questions attempted."
+Unanswered **multiple choice** counts as wrong rather than being ignored, so the
+denominator is "questions asked," not "questions attempted."
+
+Unanswered **free text** is different: it is never sent to the model and never scored.
+A blank prompt used to come back 0/10 and get averaged into the overall score, which
+punished skipping exactly as hard as being wrong. Unattempted is not the same as bad —
+the results page marks it "skipped" and leaves it out of the average.
 
 ### Question language scales with difficulty
 
@@ -77,11 +82,20 @@ backoff on failure. Without this, a shape change throws a `TypeError` deep in th
 *after* three or four calls have already been paid for. Failures surface as a specific 503
 the UI can act on, not a generic 500.
 
-**Vocabulary count scales with article length.** `vocabularyTarget()` asks for roughly one
-word per 90 words of text, weighted by difficulty and clamped to 6–20. A fixed count
-over-saturates a short article and leaves a long one sparse. The model treats counts as
-suggestions, so `normalizeVocabulary()` enforces the ceiling and de-duplicates — duplicates
-matter beyond tidiness, because they generate two quiz questions on the same word.
+**Vocabulary count scales with article length — and beginners get more, not fewer.**
+`vocabularyTarget()` asks for roughly one word per 90 words of text, weighted 1.2 / 1.0 / 0.8
+by level and clamped to 6–20. The weighting originally ran the other way, on the assumption
+that a beginner is more easily overwhelmed; that had it backwards. The vocabulary list *is*
+the help, and a beginner meets more unfamiliar words in the same text than an advanced
+reader does. The model treats counts as suggestions, so `normalizeVocabulary()` enforces the
+ceiling and de-duplicates — duplicates matter beyond tidiness, because they generate two
+quiz questions on the same word.
+
+**Each word carries both its forms.** `word` is the dictionary form the definition card
+headlines; `surfaceForm` is the exact substring in the article, which is what gets
+highlighted — so `désolé` still marks `désolée`. The server verifies the surface form
+actually occurs in the text and drops it if not, falling back to matching the base form.
+This was previously a known limitation: a lemma the article never spells never highlighted.
 
 **Article extraction tries two strategies.** Mozilla's Readability (the Firefox Reader Mode
 algorithm) runs first; a regex extractor is the fallback. The regex extractor *scores*
@@ -180,6 +194,7 @@ All routes except `/health` and the two auth entry points require
 | GET | `/api/lessons` | History, `limit`/`offset`, with computed `overall_score` |
 | GET | `/api/lessons/:id` | Lesson + any existing response |
 | POST | `/api/lessons/:id/submit` | Submit answers → graded feedback |
+| DELETE | `/api/lessons/:id` | Responses and notes cascade; saved words survive |
 | POST | `/api/vocabulary/save` | Upsert a saved word |
 | GET | `/api/vocabulary` | Saved words, filterable by `language` |
 | DELETE | `/api/vocabulary/:id` | |
@@ -229,10 +244,9 @@ Honest list — these are known, not undiscovered.
   Coverage should start with LLM output validation and the auth flow.
 - **Frontend types are hand-mirrored** from `src/types/models.ts` with nothing enforcing
   agreement. This already caused one bug.
-- **Vocabulary can be a lemma the article never spells.** The model returns `aimer` where
-  the text has `aimait`, so that entry never highlights. Needs lemmatisation.
+- **No response caching.** The same article reprocessed is four fresh Claude calls.
 - **Accessibility is incomplete.** Keyboard focus and MCQ semantics are fixed; a full pass
-  (labels, live regions, the vocabulary popover as a real dialog) is in progress.
+  (labels, live regions) is in progress.
 - **Not responsive yet.** Desktop-first; a mobile pass is the current work.
 
 [docs/SCALE.md](docs/SCALE.md) covers what breaks at 10k users in more depth — query costs,

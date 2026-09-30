@@ -2,11 +2,187 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  margin: 0;
-  font-family: 'Albert Sans', sans-serif;
-  background: #F7F3EB;
-  color: #3D3929;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/*
+ * A few things here genuinely belong in CSS rather than Tailwind classes:
+ * repeating gradients for ruled paper, box-decoration-break for highlighter
+ * strokes that wrap across lines, and gradients whose color is driven by a
+ * custom property. Everything else — layout, spacing, color — stays in
+ * Tailwind utilities.
+ */
+
+@layer base {
+  body {
+    margin: 0;
+    background: theme('colors.paper');
+    color: theme('colors.ink.DEFAULT');
+    font-family: theme('fontFamily.ui');
+    /* Recursive's casual axis, held just off its linear extreme. This is the
+       voice of the whole UI — without it Recursive reads as a plain grotesque. */
+    font-variation-settings: 'CASL' 0.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+    font-variation-settings: inherit;
+  }
+
+  /* One visible focus treatment for the whole app, in pen blue. Components
+     that need a different shape override it locally. */
+  :focus-visible {
+    outline: 2px solid theme('colors.pen.DEFAULT');
+    outline-offset: 2px;
+  }
+
+  /* Never italicize CJK — Literata's italic is a synthetic slant there. */
+  :lang(ja),
+  :lang(ko) {
+    font-style: normal !important;
+  }
+}
+
+@layer components {
+  /* ── Paper ──────────────────────────────────────────────────────────── */
+
+  /* 24px graph-paper grid. */
+  .notebook-grid {
+    background-color: theme('colors.paper');
+    background-image: linear-gradient(theme('colors.grid') 1px, transparent 1px),
+      linear-gradient(90deg, theme('colors.grid') 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /*
+   * Ruled interior for cards.
+   *
+   * `--rule-h` must equal the line-height of the text sitting on it, or the
+   * text and the rules drift apart down the card. Each surface sets its own
+   * rather than sharing one global rhythm, because a definition card and a
+   * writing textarea are set at different sizes.
+   */
+  .ruled {
+    --rule-h: 26px;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent calc(var(--rule-h) - 1px),
+      theme('colors.rule.DEFAULT') calc(var(--rule-h) - 1px),
+      theme('colors.rule.DEFAULT') var(--rule-h)
+    );
+  }
+
+  /*
+   * Ruled interior for textareas. Same rule as `.ruled`: `--rule-h` tracks the
+   * textarea's line-height. The offset is its top padding, which lands each
+   * rule just under a baseline rather than striking through it.
+   */
+  .ruled-input {
+    --rule-h: 32px;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent calc(var(--rule-h) - 1px),
+      theme('colors.rule.textarea') calc(var(--rule-h) - 1px),
+      theme('colors.rule.textarea') var(--rule-h)
+    );
+    background-position: 0 6px;
+  }
+
+  /*
+   * A page from a notebook: horizontal rules plus the red margin line down the
+   * left. Used for the notes field on the results page, where what you are
+   * writing really is a note in a margin.
+   */
+  .ruled-notes {
+    --rule-h: 30px;
+    --margin-x: 30px;
+    background-image: linear-gradient(
+        90deg,
+        transparent var(--margin-x),
+        theme('colors.margin') var(--margin-x),
+        theme('colors.margin') calc(var(--margin-x) + 2px),
+        transparent calc(var(--margin-x) + 2px)
+      ),
+      repeating-linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent calc(var(--rule-h) - 1px),
+        theme('colors.rule.textarea') calc(var(--rule-h) - 1px),
+        theme('colors.rule.textarea') var(--rule-h)
+      );
+    background-position:
+      0 0,
+      0 5px;
+  }
+
+  /* ── Highlighter ────────────────────────────────────────────────────── */
+
+  /*
+   * A marker stroke. `--hl` carries an RGB triple (set by the Highlight
+   * component from the part of speech) and `--hl-m` scales the alphas so the
+   * lighter inks — yellow especially — read at the same strength as blue.
+   *
+   * The uneven border-radius and the off-axis gradient angle are the point:
+   * they read as a hand-drawn stroke instead of a rounded rectangle.
+   * box-decoration-break keeps the stroke intact when a phrase wraps a line.
+   */
+  .hl {
+    --hl-m: 1;
+    background-image: linear-gradient(
+      100deg,
+      rgba(var(--hl), calc(0.12 * var(--hl-m))) 0%,
+      rgba(var(--hl), calc(0.55 * var(--hl-m))) 4%,
+      rgba(var(--hl), calc(0.42 * var(--hl-m))) 50%,
+      rgba(var(--hl), calc(0.6 * var(--hl-m))) 96%,
+      rgba(var(--hl), calc(0.12 * var(--hl-m))) 100%
+    );
+    border-radius: 3px 8px 4px 9px / 8px 4px 9px 3px;
+    padding: 0 3px;
+    margin: 0 -3px;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+
+  /* The word whose definition is currently open. */
+  .hl-open {
+    box-shadow: inset 0 -2.5px 0 theme('colors.pen.DEFAULT');
+  }
+
+  /* Nav variant: the stroke sits low, like underlining a word in a list. */
+  .hl-nav {
+    background-size: 100% 42%;
+    background-position: 0 68%;
+    background-repeat: no-repeat;
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
+  }
+
+  /* ── Type ───────────────────────────────────────────────────────────── */
+
+  /* Recursive's mono + full casual axes. Used for margin labels, dates,
+     counts — the pencil-in-the-margin voice. */
+  .mono {
+    font-variation-settings: 'MONO' 1, 'CASL' 1;
+  }
+
+  /* Full casual, proportional. The wordmark and primary button copy. */
+  .casual {
+    font-variation-settings: 'CASL' 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

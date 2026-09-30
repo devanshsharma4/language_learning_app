@@ -3,9 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ErrorBoundary from './components/ErrorBoundary';
 import RequireAuth from './components/RequireAuth';
 import RedirectIfAuthed from './components/RedirectIfAuthed';
-import Home from './pages/Home';
-import Login from './pages/Login';
-import Register from './pages/Register';
+import Welcome from './pages/Welcome';
 import Dashboard from './pages/Dashboard';
 import LessonView from './pages/LessonView';
 import LessonResults from './pages/LessonResults';
@@ -41,13 +39,25 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <Routes>
-            {/* Public */}
-            <Route path="/" element={<Home />} />
+            {/* Public.
+
+                One page serves all three paths. The tabs switch between the
+                forms by navigating, so /login and /register still deep-link and
+                the back button still works, but the page itself never remounts
+                and nothing typed is lost on a switch. */}
+            <Route
+              path="/"
+              element={
+                <RedirectIfAuthed>
+                  <Welcome />
+                </RedirectIfAuthed>
+              }
+            />
             <Route
               path="/login"
               element={
                 <RedirectIfAuthed>
-                  <Login />
+                  <Welcome />
                 </RedirectIfAuthed>
               }
             />
@@ -55,7 +65,7 @@ export default function App() {
               path="/register"
               element={
                 <RedirectIfAuthed>
-                  <Register />
+                  <Welcome />
                 </RedirectIfAuthed>
               }
             />

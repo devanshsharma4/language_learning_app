@@ -1,103 +1,104 @@
 import type { Feedback } from '../../types';
 import { MAX_SCORE, computeSectionScores } from '../../lib/score';
 
-interface ScoreSummaryProps {
-  feedback: Feedback;
-}
-
-function CircularProgress({ score: rawScore, size = 120 }: { score: number; size?: number }) {
-  // Clamped at the point of use: an out-of-range score used to render a negative
-  // strokeDashoffset, which draws the ring inside-out rather than failing loudly.
-  const score = Math.min(100, Math.max(0, Number.isFinite(rawScore) ? rawScore : 0));
-  const strokeWidth = 8;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (score / 100) * circumference;
-  const color = score >= 70 ? 'text-sage' : 'text-terracotta';
-  const trackColor = score >= 70 ? 'text-sage/20' : 'text-terracotta/20';
+/**
+ * The overall score, ringed by hand.
+ *
+ * Two irregular ellipses at opposing rotations, the way you circle a mark on a
+ * paper and go round twice because the first pass missed. It replaces the
+ * animated progress ring from the old design, which read as a dashboard gauge
+ * and coloured itself red below 70% — a number that is already the headline
+ * does not also need to be scolding.
+ */
+function ScoreRing({ score }: { score: number }) {
+  const rounded = Math.round(Math.min(100, Math.max(0, score)));
 
   return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={strokeWidth}
-          className={trackColor}
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          className={color}
-          style={{ transition: 'stroke-dashoffset 0.8s ease-out' }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className={`text-2xl font-display font-bold ${score >= 70 ? 'text-sage-dark' : 'text-terracotta'}`}>
-          {Math.round(score)}%
-        </span>
+    <div className="relative flex h-[170px] w-[190px] flex-shrink-0 flex-col items-center justify-center">
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 rotate-[-9deg] border-[3px] border-pen"
+        style={{ borderRadius: '52% 48% 55% 45% / 48% 55% 45% 52%' }}
+      />
+      <div
+        aria-hidden="true"
+        className="absolute inset-y-1.5 -right-1 left-1 rotate-[6deg] border-2 border-pen/55"
+        style={{ borderRadius: '48% 55% 45% 52% / 55% 45% 52% 48%' }}
+      />
+      <div className="flex items-baseline font-display font-bold text-ink">
+        <span className="text-[84px] leading-none tracking-[-2px]">{rounded}</span>
+        <span className="text-[30px]">%</span>
       </div>
+      <div className="mono mt-1 text-xs text-ink-3">overall</div>
     </div>
   );
 }
 
-function StatCard({ label, value, subtext }: { label: string; value: string; subtext?: string }) {
+interface BarProps {
+  label: string;
+  /** 0–100. Drives the fill width only. */
+  percent: number;
+  /** What the score actually was, in its own units. */
+  value: string;
+}
+
+function Bar({ label, percent, value }: BarProps) {
   return (
-    <div className="text-center">
-      <p className="text-sm text-bark-light mb-1">{label}</p>
-      <p className="text-xl font-display font-semibold text-bark">{value}</p>
-      {subtext && <p className="text-xs text-bark-light/60 mt-0.5">{subtext}</p>}
+    <div className="grid grid-cols-[110px_1fr_56px] items-center gap-3 text-[15px] sm:grid-cols-[130px_1fr_64px] sm:gap-4">
+      <span className="font-650">{label}</span>
+      <div
+        className="h-3.5 overflow-hidden rounded border-[1.5px] border-line-strong bg-white"
+        role="img"
+        aria-label={`${label}: ${value}`}
+      >
+        <div className="h-full bg-sticker/85" style={{ width: `${Math.min(100, percent)}%` }} />
+      </div>
+      <span className="mono text-right font-bold">{value}</span>
     </div>
   );
 }
 
-export default function ScoreSummary({ feedback }: ScoreSummaryProps) {
+export default function ScoreSummary({ feedback }: { feedback: Feedback }) {
   const { mcqCorrect, mcqTotal, mcqPct, shortAnswerAvg, writingAvg, overall } =
     computeSectionScores(feedback);
 
-  // Only sections the lesson actually had are rendered, so the column count has
-  // to follow the data -- a fixed grid-cols-3 left a hole with one or two stats,
-  // and squeezed three labels into ~90px each on a phone.
-  const stats = [
+  // Only the sections this lesson actually had. A beginner lesson has no short
+  // answers, and a bar reading 0/10 for a section that was never set would be a
+  // failure the learner never had the chance to avoid.
+  const bars = [
     mcqPct !== null && {
-      label: 'Multiple Choice',
+      label: 'Multiple choice',
+      percent: mcqPct,
       value: `${mcqCorrect}/${mcqTotal}`,
-      subtext: `${Math.round(mcqPct)}%`,
     },
     shortAnswerAvg !== null && {
-      label: 'Short Answer',
+      label: 'Short answer',
+      percent: shortAnswerAvg * 10,
       value: `${shortAnswerAvg.toFixed(1)}/${MAX_SCORE}`,
-      subtext: 'avg score',
     },
     writingAvg !== null && {
       label: 'Writing',
+      percent: writingAvg * 10,
       value: `${writingAvg.toFixed(1)}/${MAX_SCORE}`,
-      subtext: 'avg score',
     },
-  ].filter((s): s is { label: string; value: string; subtext: string } => Boolean(s));
+  ].filter((bar): bar is BarProps => Boolean(bar));
 
   return (
-    <div className="bg-white rounded-2xl border border-sand shadow-sm px-8 py-5">
-      <div className="flex flex-col sm:flex-row items-center gap-6">
-        <CircularProgress score={overall ?? 0} />
-        <div
-          className="flex-1 grid gap-6 w-full"
-          style={{ gridTemplateColumns: `repeat(${Math.min(stats.length, 2)}, minmax(0, 1fr))` }}
-        >
-          {stats.map((stat) => (
-            <StatCard key={stat.label} {...stat} />
-          ))}
-        </div>
+    <div className="flex flex-wrap items-center gap-8 sm:flex-nowrap sm:gap-12">
+      <ScoreRing score={overall ?? 0} />
+
+      {/* min-w-0 with a floor: inside nested flex containers the bar column
+          collapses to nothing without it, leaving the label and the score with
+          a sliver between them. */}
+      <div className="flex w-full min-w-0 flex-1 flex-col gap-4 sm:min-w-[260px]">
+        {bars.map((bar) => (
+          <Bar key={bar.label} {...bar} />
+        ))}
+        {/* Saying how the number was reached, because an unexplained composite
+            score invites the reader to distrust it. */}
+        <p className="mono m-0 text-xs text-ink-3">
+          overall = the average of {bars.length === 1 ? 'this' : `these ${bars.length}`}
+        </p>
       </div>
     </div>
   );

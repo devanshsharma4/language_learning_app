@@ -1,22 +1,39 @@
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../api/client';
 import type { LessonSummary } from '../types';
-import { languageEnglishName, languageFlag } from '../lib/languages';
+import { languageCode, monthLabel } from '../lib/languages';
+import {
+  ButtonLink,
+  NotebookPage,
+  SearchField,
+  Spinner,
+  StickyNote,
+  TopNav,
+} from '../components/notebook';
+import LessonRow from '../components/lessons/LessonRow';
 
-function ScoreBadge({ score }: { score: number }) {
-  const color = score >= 70
-    ? 'text-sage-dark bg-sage/10 border-sage/30'
-    : 'text-terracotta bg-terracotta/10 border-terracotta/30';
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-semibold border ${color}`}>
-      {score}%
-    </span>
-  );
+type Status = 'all' | 'progress' | 'graded';
+
+interface LessonsResponse {
+  lessons: LessonSummary[];
+  total: number;
 }
 
+const STATUSES: Array<{ value: Status; label: string }> = [
+  { value: 'all', label: 'All' },
+  { value: 'progress', label: 'In progress' },
+  { value: 'graded', label: 'Graded' },
+];
+
 export default function LessonHistory() {
-  const { data, isLoading, error } = useQuery<{ lessons: LessonSummary[]; total: number }>({
+  const queryClient = useQueryClient();
+  const [search, setSearch] = useState('');
+  const [language, setLanguage] = useState<string | null>(null);
+  const [status, setStatus] = useState<Status>('all');
+
+  const { data, isLoading, error } = useQuery<LessonsResponse>({
     queryKey: ['lessons'],
     queryFn: async () => {
       const { data } = await api.get('/lessons?limit=50');
@@ -24,125 +41,236 @@ export default function LessonHistory() {
     },
   });
 
-  const lessons = data?.lessons ?? [];
+  const remove = useMutation({
+    mutationFn: (id: string) => api.delete(`/lessons/${id}`),
+    // Drop the row immediately, then reconcile. The row is already gone from
+    // the reader's intent by the time they confirm, and leaving it in place
+    // until the round trip finishes makes the page feel broken.
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: ['lessons'] });
+      const previous = queryClient.getQueryData<LessonsResponse>(['lessons']);
+
+      queryClient.setQueryData<LessonsResponse>(['lessons'], (old) =>
+        old
+          ? {
+              lessons: old.lessons.filter((lesson) => String(lesson.id) !== String(id)),
+              total: Math.max(0, old.total - 1),
+            }
+          : old,
+      );
+
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous) queryClient.setQueryData(['lessons'], context.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['lessons'] });
+    },
+  });
+
+  const lessons = useMemo(() => data?.lessons ?? [], [data]);
+  const total = data?.total ?? 0;
+
+  // Page numbers count from the oldest lesson, so they have to be assigned
+  // before any filtering — p.3 stays p.3 when you narrow to one language.
+  const numbered = useMemo(
+    () => lessons.map((lesson, index) => ({ lesson, page: total - index })),
+    [lessons, total],
+  );
+
+  const languagesPresent = useMemo(
+    () => Array.from(new Set(lessons.map((lesson) => lesson.language))),
+    [lessons],
+  );
+
+  const visible = useMemo(() => {
+    const term = search.trim().toLowerCase();
+
+    return numbered.filter(({ lesson }) => {
+      if (language && lesson.language !== language) return false;
+      if (status === 'graded' && !lesson.completed) return false;
+      if (status === 'progress' && lesson.completed) return false;
+      if (!term) return true;
+
+      return [lesson.article_title_english, lesson.article_title]
+        .filter(Boolean)
+        .some((title) => title!.toLowerCase().includes(term));
+    });
+  }, [numbered, search, language, status]);
+
+  // Grouped by month, in the order the list already arrives (newest first).
+  const groups = useMemo(() => {
+    const byMonth = new Map<string, typeof visible>();
+    for (const row of visible) {
+      const key = monthLabel(row.lesson.created_at);
+      const existing = byMonth.get(key);
+      if (existing) existing.push(row);
+      else byMonth.set(key, [row]);
+    }
+    return Array.from(byMonth.entries());
+  }, [visible]);
+
+  const gradedCount = lessons.filter((lesson) => lesson.completed).length;
+  const filtered = search.trim() || language || status !== 'all';
 
   return (
-    <div className="relative min-h-screen bg-cream font-body overflow-hidden">
-      {/* Grain texture */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.035]"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
-          backgroundRepeat: 'repeat',
-          backgroundSize: '128px 128px',
-        }}
-      />
+    <NotebookPage>
+      <TopNav />
 
-      <div className="relative z-10 max-w-3xl mx-auto px-6 py-8">
-        {/* Header */}
-        <div className="mb-8">
+      <main className="px-6 pb-24 pt-12 xl:pl-[210px] xl:pr-8">
+        <p className="mono text-[13px] font-semibold text-ink-3">table of contents</p>
+        <h1 className="mb-1.5 mt-1.5 font-display text-[40px] font-bold leading-[1.02] tracking-[-0.5px] xl:text-[46px]">
+          My lessons
+        </h1>
+        <p className="mono mb-9 text-[13px] text-ink-3">
+          {total} page{total === 1 ? '' : 's'} · {gradedCount} graded ·{' '}
+          {total - gradedCount} in progress
+        </p>
+
+        {lessons.length > 0 && (
+          <div className="mb-7 flex flex-wrap items-center gap-4 lg:gap-5">
+            <SearchField
+              value={search}
+              onChange={setSearch}
+              label="Search lessons"
+              placeholder="Search titles"
+              className="w-full sm:w-[280px]"
+            />
+
+            {languagesPresent.length > 1 && (
+              <div role="group" aria-label="Language" className="flex gap-1.5 text-sm font-650">
+                {[null, ...languagesPresent].map((value) => {
+                  const active = language === value;
+                  return (
+                    <button
+                      key={value ?? 'all'}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => setLanguage(value)}
+                      className={`rounded-lg border-[1.5px] px-3 py-1.5 ${
+                        value ? 'mono' : ''
+                      } ${
+                        active
+                          ? 'border-pen bg-pen-tint text-pen-dark'
+                          : 'border-line bg-white text-ink-2 hover:text-ink'
+                      }`}
+                    >
+                      {value ? languageCode(value) : 'All'}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <div
+              role="group"
+              aria-label="Status"
+              className="inline-flex gap-1 rounded-xl border-[1.5px] border-line bg-white p-1 text-sm font-semibold lg:ml-auto"
+            >
+              {STATUSES.map((option) => {
+                const active = status === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setStatus(option.value)}
+                    className={`rounded-lg px-3.5 py-1.5 ${
+                      active ? 'bg-pen-chip text-pen-dark' : 'text-ink-2 hover:text-ink'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {isLoading && (
+          <div className="flex flex-col items-start gap-6 py-12">
+            <div className="flex items-center gap-3 text-ink-2">
+              <Spinner size={22} label="Loading lessons" />
+              Opening your notebook…
+            </div>
+            <StickyNote className="max-w-[340px]">
+              Our server was napping and is waking up. This can take up to a minute the first
+              time — no need to refresh.
+            </StickyNote>
+          </div>
+        )}
+
+        {error && (
+          <p className="rounded-xl border-[1.5px] border-wrong bg-wrong-tint px-4 py-3 text-sm text-wrong-text">
+            Couldn&apos;t load your lessons. Try again in a moment.
+          </p>
+        )}
+
+        {!isLoading && !error && lessons.length === 0 && (
+          <div className="max-w-md rounded-xl border-2 border-dashed border-line-strong px-7 py-9">
+            <h2 className="m-0 font-display text-[22px] font-bold">Nothing in here yet</h2>
+            <p className="mb-5 mt-2 text-[15px] leading-relaxed text-ink-2">
+              Every lesson you make becomes a page in this notebook.
+            </p>
+            <ButtonLink to="/dashboard">Start your first page</ButtonLink>
+          </div>
+        )}
+
+        {!isLoading && lessons.length > 0 && visible.length === 0 && (
+          <p className="py-10 text-[15px] text-ink-2">
+            No pages match that.{' '}
+            <button
+              type="button"
+              onClick={() => {
+                setSearch('');
+                setLanguage(null);
+                setStatus('all');
+              }}
+              className="font-650 text-pen underline underline-offset-4"
+            >
+              Clear the filters
+            </button>
+          </p>
+        )}
+
+        {groups.map(([month, rows], groupIndex) => (
+          <section key={month} className={groupIndex > 0 ? 'mt-10' : ''}>
+            <div className="mono mb-1.5 flex items-center gap-3.5 text-[13px] font-bold text-ink-3">
+              {month}
+              <span aria-hidden="true" className="flex-grow border-t-[1.5px] border-dashed border-line-strong" />
+            </div>
+
+            <ol className="m-0 flex list-none flex-col p-0">
+              {rows.map(({ lesson, page }, index) => (
+                <LessonRow
+                  key={lesson.id}
+                  lesson={lesson}
+                  page={page}
+                  // Only the newest row overall, and only when nothing is
+                  // filtered — "the page you are on" is meaningless in a
+                  // narrowed list.
+                  featured={groupIndex === 0 && index === 0 && !filtered}
+                  onDelete={(id) => remove.mutate(id)}
+                  deleting={remove.isPending && String(remove.variables) === String(lesson.id)}
+                />
+              ))}
+            </ol>
+          </section>
+        ))}
+
+        {lessons.length > 0 && (
           <Link
             to="/dashboard"
-            className="inline-flex items-center gap-1 text-sm text-bark-light hover:text-bark transition-colors mb-4"
+            className="mt-8 inline-flex items-center gap-2 text-base font-650 no-underline hover:underline"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+              <path d="M12 5v14M5 12h14" />
             </svg>
-            Dashboard
+            Start a new page
           </Link>
-          <h1 className="font-display text-3xl font-bold text-bark">My Lessons</h1>
-          <p className="text-bark-light mt-1">Your completed and in-progress lessons</p>
-        </div>
-
-        {/* Loading */}
-        {isLoading && (
-          <div className="flex items-center justify-center py-20">
-            <div className="flex items-center gap-3 text-bark-light">
-              <svg className="animate-spin h-6 w-6" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              Loading lessons...
-            </div>
-          </div>
         )}
-
-        {/* Error */}
-        {error && (
-          <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-2xl px-4 py-3 text-center">
-            Failed to load lessons.
-          </div>
-        )}
-
-        {/* Empty state */}
-        {!isLoading && !error && lessons.length === 0 && (
-          <div className="text-center py-20">
-            <div className="text-sage mb-4">
-              <svg className="w-12 h-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-              </svg>
-            </div>
-            <p className="text-bark-light mb-4">No lessons yet</p>
-            <Link
-              to="/dashboard"
-              className="inline-block px-6 py-3 bg-sage hover:bg-sage-dark text-white font-semibold rounded-2xl shadow-md transition-all duration-200"
-            >
-              Create Your First Lesson
-            </Link>
-          </div>
-        )}
-
-        {/* Lesson list */}
-        {lessons.length > 0 && (
-          <div className="space-y-3">
-            {lessons.map((lesson) => {
-              const href = lesson.completed
-                ? `/lessons/${lesson.id}/results`
-                : `/lessons/${lesson.id}`;
-
-              return (
-                <Link
-                  key={lesson.id}
-                  to={href}
-                  className="block bg-white rounded-2xl border border-sand shadow-sm p-5 hover:shadow-md hover:border-sage/30 transition-all duration-200"
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="font-display text-lg font-semibold text-bark truncate">
-                        {lesson.article_title || 'Untitled Article'}
-                      </h3>
-                      <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                        <span className="text-sm text-bark-light">
-                          {languageFlag(lesson.language)} {languageEnglishName(lesson.language)}
-                        </span>
-                        <span className="text-bark-light/30">|</span>
-                        <span className="text-sm text-bark-light capitalize">{lesson.difficulty}</span>
-                        <span className="text-bark-light/30">|</span>
-                        <span className="text-sm text-bark-light">
-                          {new Date(lesson.created_at).toLocaleDateString(undefined, {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                          })}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex-shrink-0">
-                      {lesson.completed && lesson.overall_score != null ? (
-                        <ScoreBadge score={lesson.overall_score} />
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium text-bark-light bg-cream-dark border border-sand">
-                          In Progress
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
+      </main>
+    </NotebookPage>
   );
 }

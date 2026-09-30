@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { Spinner } from './notebook';
 
 /**
  * Gates a route behind authentication.
@@ -21,25 +22,10 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
   // Token present but not yet validated.
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-cream font-body flex items-center justify-center">
-        <div className="flex items-center gap-3 text-bark-light">
-          <svg className="animate-spin h-6 w-6" viewBox="0 0 24 24">
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-              fill="none"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-            />
-          </svg>
-          Loading...
+      <div className="notebook-grid flex min-h-screen items-center justify-center">
+        <div className="flex items-center gap-3 text-ink-2">
+          <Spinner size={22} label="Checking your session" />
+          One moment…
         </div>
       </div>
     );

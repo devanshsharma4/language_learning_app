@@ -21,7 +21,7 @@ export default function RedirectIfAuthed({ children }: { children: React.ReactNo
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-cream font-body flex items-center justify-center">
+      <div className="notebook-grid flex min-h-screen items-center justify-center">
         <span className="sr-only">Checking your session</span>
       </div>
     );

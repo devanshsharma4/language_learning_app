@@ -7,6 +7,7 @@ export const MOCK_LESSON: Lesson = {
   language: 'french',
   difficulty: 'intermediate',
   article_title: 'La vie dans les villes du futur',
+  article_title_english: 'What Living in a Future City Might Look Like',
   article_text: `Les villes du futur promettent d'etre des lieux fascinants ou la technologie et la nature cohabitent en harmonie. Les batiments intelligents regulent leur propre consommation d'energie, tandis que les jardins verticaux recouvrent les facades, purifiant l'air et fournissant des aliments frais aux habitants.
 
 Les transports en commun seront entierement electriques et autonomes. Les citoyens pourront se deplacer sans se soucier de la circulation, car des systemes avances d'intelligence artificielle gereront le flux de vehicules. Les velos et les espaces pietons auront la priorite sur les automobiles.

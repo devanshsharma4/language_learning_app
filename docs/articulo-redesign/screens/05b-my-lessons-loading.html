@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Articulo · My lessons (loading)</title>
+<meta name="viewport" content="width=1440">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Recursive:slnt,wght,CASL,CRSV,MONO@-15..0,300..1000,0..1,0..1,0..1&family=Zilla+Slab:wght@600;700&family=Noto+Sans+JP:wght@400;700&family=Noto+Sans+KR:wght@400;700&display=swap">
+<style>
+body{margin:0;font-family:'Recursive','Noto Sans JP','Noto Sans KR',sans-serif;color:#1E2230;background:#FCFBF7;font-variation-settings:'CASL' 0.5}
+button,input,textarea{font:inherit;color:inherit}
+a{color:#2B4FD8}a:hover{color:#1A36A8}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+
+</head>
+<body>
+<div style="width: 1440px; height: 800px; position: relative; box-sizing: border-box; background-color: #FCFBF7; background-image: linear-gradient(#E4EBF1 1px, transparent 1px), linear-gradient(90deg, #E4EBF1 1px, transparent 1px); background-size: 24px 24px; overflow: hidden">
+
+<div style="position: absolute; left: 150px; top: 72px; bottom: 0; width: 2px; background: #F4C2BD"></div>
+
+<header style="height: 72px; box-sizing: border-box; padding: 0 48px; display: flex; align-items: center; justify-content: space-between; background: #FCFBF7; border-bottom: 1.5px solid #B9C3CE; position: relative">
+<a href="03-dashboard-new-lesson.html" style="text-decoration: none; color: #1E2230; font-size: 26px; font-weight: 850; font-variation-settings: 'CASL' 1; letter-spacing: -0.5px">articul<span style="background: linear-gradient(100deg, rgba(120,175,255,0.15) 0%, rgba(120,175,255,0.6) 6%, rgba(120,175,255,0.48) 50%, rgba(120,175,255,0.65) 94%, rgba(120,175,255,0.15) 100%); border-radius: 3px 8px 4px 9px / 8px 4px 9px 3px; padding: 0 3px">o</span></a>
+<nav aria-label="Main" style="display: flex; gap: 4px; font-size: 16px; font-weight: 550">
+<a href="03-dashboard-new-lesson.html" style="padding: 10px 16px; text-decoration: none; color: #3A4256">New lesson</a>
+<a href="05-my-lessons.html" aria-current="page" style="padding: 10px 16px; text-decoration: none; color: #1E2230; font-weight: 700; background: linear-gradient(100deg, rgba(120,175,255,0.12) 0%, rgba(120,175,255,0.55) 5%, rgba(120,175,255,0.42) 50%, rgba(120,175,255,0.6) 95%, rgba(120,175,255,0.12) 100%); background-size: 100% 42%; background-position: 0 68%; background-repeat: no-repeat">My lessons</a>
+<a href="07-vocabulary.html" style="padding: 10px 16px; text-decoration: none; color: #3A4256">Vocabulary</a>
+<a href="06-notes.html" style="padding: 10px 16px; text-decoration: none; color: #3A4256">Notes</a>
+</nav>
+<button aria-label="Account menu" style="display: flex; align-items: center; gap: 10px; padding: 5px 12px 5px 5px; background: #FFFFFF; border: 1.5px solid #B9C3CE; border-radius: 999px; cursor: pointer; font-size: 15px; font-weight: 600">
+<span style="width: 30px; height: 30px; border-radius: 50%; background: #D6E4FF; color: #1A36A8; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; font-variation-settings: 'CASL' 1">D</span>
+Devansh
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+</button>
+</header>
+
+<main style="box-sizing: border-box; padding: 48px 0 0 210px; width: 1360px">
+<div style="font-size: 14px; font-variation-settings: 'MONO' 1, 'CASL' 1; color: #5B6170; font-weight: 600">table of contents</div>
+<h1 style="margin: 6px 0 0; font-family: 'Zilla Slab', serif; font-size: 58px; line-height: 1.02; font-weight: 700; letter-spacing: -0.5px">My lessons</h1>
+
+<div style="width: 1080px; display: flex; flex-direction: column; align-items: center; gap: 28px; padding-top: 140px">
+<div role="status" aria-live="polite" style="display: flex; align-items: center; gap: 14px; font-size: 17px; color: #3A4256">
+<span style="width: 26px; height: 26px; box-sizing: border-box; border: 3.5px solid #D6E4FF; border-top-color: #2B4FD8; border-radius: 50%; animation: spin 0.9s linear infinite"></span>Loading your lessons…</div>
+<div style="position: relative; width: 400px; box-sizing: border-box; padding: 16px 20px; background: #FFF4CC; transform: rotate(-1deg); box-shadow: 0 1px 2px rgba(30,34,48,0.1), 0 14px 24px -16px rgba(30,34,48,0.4)">
+<div style="position: absolute; top: -11px; left: 160px; width: 80px; height: 22px; background: rgba(188,214,236,0.8); transform: rotate(3deg)"></div>
+<p style="margin: 0; font-size: 15px; line-height: 1.5">Still waking up the server — this can take up to a minute the first time. Your lessons are safe.</p>
+</div>
+</div>
+</main>
+</div>
+</body>
+</html>

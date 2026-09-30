@@ -1,7 +1,12 @@
 import type { LessonQuestion } from '../../types';
+import { RuledTextarea, SectionLabel, SelectableChoiceRow } from '../notebook';
+import { OPTION_LABELS } from '../../lib/mcq';
 
 interface QuestionsSectionProps {
   questions: LessonQuestion[];
+  language: string;
+  /** Part number per section id, so the chips match the margin outline. */
+  partNumbers: Record<string, number>;
   mcqAnswers: Record<string, number>;
   shortAnswers: Record<string, string>;
   onMCQChange: (questionId: string, optionIndex: number) => void;
@@ -9,11 +14,12 @@ interface QuestionsSectionProps {
   disabled?: boolean;
 }
 
-const optionLabels = ['A', 'B', 'C', 'D'];
+type MCQ = Extract<LessonQuestion, { options: string[] }>;
 
 interface MCQBlockProps {
-  question: Extract<LessonQuestion, { options: string[] }>;
+  question: MCQ;
   number: number;
+  language: string;
   selected: number | undefined;
   onChange: (optionIndex: number) => void;
   disabled?: boolean;
@@ -22,23 +28,17 @@ interface MCQBlockProps {
 /**
  * One multiple-choice question.
  *
- * Extracted because the reading-comprehension and vocabulary blocks were
- * byte-identical copies, so every fix below had to be made twice:
- *
- * - `fieldset`/`legend` gives the option group its question as an accessible
- *   name; previously a screen reader read four bare options with no context.
- * - The radio stays `sr-only` (the styled span is the visual control), so the
- *   label carries `focus-within` styling. Without it a keyboard user tabbing
- *   into a quiz saw no indication of where focus was -- arrow keys worked, but
- *   invisibly.
- * - A/B/C/D select an option directly. Native radios only do arrow keys, and
- *   letter shortcuts are much faster once you notice the labels.
+ * `fieldset`/`legend` gives the option group its question as an accessible
+ * name — without it a screen reader reads four bare options with no context.
+ * A–D select an option directly; native radios only do arrow keys, and the
+ * letters are much faster once you have noticed the badges. The badges are the
+ * hint, so there is no separate line of instructions.
  */
-function MCQBlock({ question, number, selected, onChange, disabled }: MCQBlockProps) {
+function MCQBlock({ question, number, language, selected, onChange, disabled }: MCQBlockProps) {
   function handleKeyDown(event: React.KeyboardEvent<HTMLFieldSetElement>) {
     if (disabled || event.metaKey || event.ctrlKey || event.altKey) return;
 
-    const index = optionLabels.indexOf(event.key.toUpperCase());
+    const index = OPTION_LABELS.indexOf(event.key.toUpperCase());
     if (index === -1 || index >= question.options.length) return;
 
     event.preventDefault();
@@ -46,119 +46,151 @@ function MCQBlock({ question, number, selected, onChange, disabled }: MCQBlockPr
   }
 
   return (
-    <fieldset onKeyDown={handleKeyDown} disabled={disabled} className="border-0 p-0 m-0">
-      <legend className="text-bark font-medium mb-3">
-        <span className="text-sage-dark mr-2">{number}.</span>
+    <fieldset
+      onKeyDown={handleKeyDown}
+      disabled={disabled}
+      className="m-0 mb-10 flex flex-col gap-2.5 border-0 p-0 last:mb-0"
+    >
+      <legend lang={language} className="mb-3.5 flex gap-3 p-0 font-read text-[18px] font-semibold">
+        <span className="mono text-pen">{number}.</span>
         {question.question}
       </legend>
-      <div className="space-y-2 ml-6">
-        {question.options.map((option, optIdx) => {
-          const isSelected = selected === optIdx;
 
-          return (
-            <label
-              key={optIdx}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-all duration-200 focus-within:ring-2 focus-within:ring-sage/50 focus-within:border-sage ${
-                isSelected
-                  ? 'border-sage bg-sage/10 shadow-sm'
-                  : 'border-sand bg-white hover:border-sage/40 hover:shadow-sm'
-              } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <input
-                type="radio"
-                name={question.id}
-                checked={isSelected}
-                onChange={() => onChange(optIdx)}
-                disabled={disabled}
-                className="sr-only"
-              />
-              <span
-                aria-hidden="true"
-                className={`flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-sm font-semibold transition-colors ${
-                  isSelected ? 'border-sage bg-sage text-white' : 'border-sand text-bark-light'
-                }`}
-              >
-                {optionLabels[optIdx]}
-              </span>
-              <span className="text-bark">{option}</span>
-            </label>
-          );
-        })}
-      </div>
+      {question.options.map((option, optIdx) => (
+        <SelectableChoiceRow
+          key={optIdx}
+          optionIndex={optIdx}
+          name={question.id}
+          lang={language}
+          selected={selected === optIdx}
+          onSelect={() => onChange(optIdx)}
+          disabled={disabled}
+        >
+          {option}
+        </SelectableChoiceRow>
+      ))}
     </fieldset>
+  );
+}
+
+interface PartHeadingProps {
+  part?: number;
+  label: string;
+  tone: 'pen' | 'verb' | 'adjective' | 'adverb';
+  heading: string;
+}
+
+function PartHeading({ part, label, tone, heading }: PartHeadingProps) {
+  return (
+    <>
+      <SectionLabel tone={tone}>
+        {part !== undefined && `part ${part} · `}
+        {label}
+      </SectionLabel>
+      <h2 className="mb-7 mt-2 font-display text-[32px] font-bold tracking-[-0.3px]">{heading}</h2>
+    </>
   );
 }
 
 export default function QuestionsSection({
   questions,
+  language,
+  partNumbers,
   mcqAnswers,
   shortAnswers,
   onMCQChange,
   onShortAnswerChange,
   disabled,
 }: QuestionsSectionProps) {
-  const readingComp = questions.filter((q) => q.type === 'reading_comprehension');
-  const vocabQs = questions.filter((q) => q.type === 'vocabulary');
+  const readingComp = questions.filter((q) => q.type === 'reading_comprehension') as MCQ[];
+  const vocabQs = questions.filter((q) => q.type === 'vocabulary') as MCQ[];
   const shortAnswerQs = questions.filter((q) => q.type === 'short_answer');
 
+  /*
+   * Each section numbers its own questions from 1. They are separate parts of
+   * the lesson doing different jobs — following the story versus recalling a
+   * word — and the margin outline, the part chips and these numbers all agree
+   * on that division, so two questions labelled "1." are never ambiguous.
+   *
+   * The vocabulary block deliberately does NOT show `q.word`: these questions
+   * ask what that exact word means, so naming it gives the answer away. It
+   * reappears on the results page, where it aids review.
+   */
   const mcqSections = [
-    { heading: 'Reading Comprehension', questions: readingComp },
-    // Note: the vocabulary block deliberately does NOT show `q.word`. These
-    // questions ask what that exact word means, so naming it gave the answer
-    // away. It reappears on the results page, where it aids review.
-    { heading: 'Vocabulary', questions: vocabQs },
-  ].filter((s) => s.questions.length > 0);
+    {
+      id: 'questions',
+      questions: readingComp,
+      tone: 'pen' as const,
+      heading: 'Did you follow the story?',
+      label: (n: number) => `${n} question${n === 1 ? '' : 's'}`,
+    },
+    {
+      id: 'vocabulary',
+      questions: vocabQs,
+      tone: 'adjective' as const,
+      heading: 'Did the words stick?',
+      label: (n: number) => `${n} word${n === 1 ? '' : 's'}`,
+    },
+  ].filter((section) => section.questions.length > 0);
 
   return (
-    <div className="space-y-12">
-      {mcqSections.map(({ heading, questions: sectionQuestions }) => (
-        <div key={heading}>
-          <h2 className="font-display text-2xl font-semibold text-bark mb-2">{heading}</h2>
-          <p className="text-sm text-bark-light mb-6">
-            Tip: press <kbd className="font-semibold">A</kbd>–<kbd className="font-semibold">D</kbd>{' '}
-            to choose an answer.
-          </p>
-          <div className="space-y-6">
-            {sectionQuestions.map((q, idx) =>
-              'options' in q ? (
-                <MCQBlock
-                  key={q.id}
-                  question={q}
-                  number={idx + 1}
-                  selected={mcqAnswers[q.id]}
-                  onChange={(optIdx) => onMCQChange(q.id, optIdx)}
-                  disabled={disabled}
-                />
-              ) : null,
-            )}
-          </div>
-        </div>
+    <>
+      {mcqSections.map((section) => (
+        <section key={section.id} id={section.id} className="mt-20 scroll-mt-6">
+          <PartHeading
+            part={partNumbers[section.id]}
+            label={section.label(section.questions.length)}
+            tone={section.tone}
+            heading={section.heading}
+          />
+
+          {section.questions.map((question, idx) => (
+            <MCQBlock
+              key={question.id}
+              question={question}
+              number={idx + 1}
+              language={language}
+              selected={mcqAnswers[question.id]}
+              onChange={(optIdx) => onMCQChange(question.id, optIdx)}
+              disabled={disabled}
+            />
+          ))}
+        </section>
       ))}
 
       {shortAnswerQs.length > 0 && (
-        <div>
-          <h2 className="font-display text-2xl font-semibold text-bark mb-6">Short Answer</h2>
-          <div className="space-y-6">
-            {shortAnswerQs.map((q, idx) => (
-              <div key={q.id}>
-                <label htmlFor={`sa-${q.id}`} className="block text-bark font-medium mb-2">
-                  <span className="text-sage-dark mr-2">{idx + 1}.</span>
-                  {q.question}
+        <section id="short" className="mt-20 scroll-mt-6">
+          <PartHeading
+            part={partNumbers.short}
+            label="short answer"
+            tone="verb"
+            heading="In your own words"
+          />
+
+          <div className="flex flex-col gap-9">
+            {shortAnswerQs.map((question, idx) => (
+              <div key={question.id}>
+                <label
+                  htmlFor={`sa-${question.id}`}
+                  lang={language}
+                  className="mb-3.5 flex gap-3 font-read text-[18px] font-semibold"
+                >
+                  <span className="mono text-pen">{idx + 1}.</span>
+                  {question.question}
                 </label>
-                <textarea
-                  id={`sa-${q.id}`}
-                  value={shortAnswers[q.id] || ''}
-                  onChange={(e) => onShortAnswerChange(q.id, e.target.value)}
+                <RuledTextarea
+                  id={`sa-${question.id}`}
+                  lang={language}
+                  rows={4}
+                  value={shortAnswers[question.id] ?? ''}
+                  onChange={(event) => onShortAnswerChange(question.id, event.target.value)}
                   disabled={disabled}
-                  placeholder="Type your answer..."
-                  rows={3}
-                  className="w-full px-4 py-4 bg-white rounded-2xl border border-sand text-bark placeholder:text-bark-light/60 focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage/50 shadow-sm hover:shadow-md transition-all duration-200 resize-none disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
-    </div>
+    </>
   );
 }

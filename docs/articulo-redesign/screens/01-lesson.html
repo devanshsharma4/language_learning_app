@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Articulo · Lesson view (slab + book serif)</title>
+<meta name="viewport" content="width=1440">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Recursive:slnt,wght,CASL,CRSV,MONO@-15..0,300..1000,0..1,0..1,0..1&family=Zilla+Slab:wght@600;700&family=Literata:ital,opsz,wght@0,7..72,400..700;1,7..72,400..700&family=Noto+Serif+JP:wght@400;700&family=Noto+Sans+JP:wght@400;700&family=Noto+Sans+KR:wght@400;700&display=swap">
+<style>
+body{margin:0;font-family:'Recursive','Noto Sans JP','Noto Sans KR',sans-serif;color:#1E2230;background:#FCFBF7;font-variation-settings:'CASL' 0.5}
+button,input,textarea{font:inherit;color:inherit}
+a{color:#2B4FD8}a:hover{color:#1A36A8}
+</style>
+
+</head>
+<body>
+<div style="width: 1440px; height: 3200px; position: relative; box-sizing: border-box; background-color: #FCFBF7; background-image: linear-gradient(#E4EBF1 1px, transparent 1px), linear-gradient(90deg, #E4EBF1 1px, transparent 1px); background-size: 24px 24px; overflow: hidden">
+
+<div style="position: absolute; left: 150px; top: 72px; bottom: 0; width: 2px; background: #F4C2BD"></div>
+
+<header style="height: 72px; box-sizing: border-box; padding: 0 48px; display: flex; align-items: center; justify-content: space-between; background: #FCFBF7; border-bottom: 1.5px solid #B9C3CE; position: relative">
+<a href="03-dashboard-new-lesson.html" style="text-decoration: none; color: #1E2230; font-size: 26px; font-weight: 850; font-variation-settings: 'CASL' 1; letter-spacing: -0.5px">articul<span style="background: linear-gradient(100deg, rgba(120,175,255,0.15) 0%, rgba(120,175,255,0.6) 6%, rgba(120,175,255,0.48) 50%, rgba(120,175,255,0.65) 94%, rgba(120,175,255,0.15) 100%); border-radius: 3px 8px 4px 9px / 8px 4px 9px 3px; padding: 0 3px">o</span></a>
+<nav aria-label="Main" style="display: flex; gap: 4px; font-size: 16px; font-weight: 550">
+<a href="03-dashboard-new-lesson.html" style="padding: 10px 16px; text-decoration: none; color: #3A4256">New lesson</a>
+<a href="#" style="padding: 10px 16px; text-decoration: none; color: #1E2230; font-weight: 700; background: linear-gradient(100deg, rgba(120,175,255,0.12) 0%, rgba(120,175,255,0.55) 5%, rgba(120,175,255,0.42) 50%, rgba(120,175,255,0.6) 95%, rgba(120,175,255,0.12) 100%); background-size: 100% 42%; background-position: 0 68%; background-repeat: no-repeat">My lessons</a>
+<a href="#" style="padding: 10px 16px; text-decoration: none; color: #3A4256">Vocabulary</a>
+<a href="#" style="padding: 10px 16px; text-decoration: none; color: #3A4256">Notes</a>
+</nav>
+<button aria-label="Account menu" style="display: flex; align-items: center; gap: 10px; padding: 5px 12px 5px 5px; background: #FFFFFF; border: 1.5px solid #B9C3CE; border-radius: 999px; cursor: pointer; font-size: 15px; font-weight: 600">
+<span style="width: 30px; height: 30px; border-radius: 50%; background: #D6E4FF; color: #1A36A8; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; font-variation-settings: 'CASL' 1">D</span>
+Devansh
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+</button>
+</header>
+
+<div style="display: flex; position: relative">
+
+<aside style="width: 150px; flex-shrink: 0; box-sizing: border-box; padding: 168px 16px 0 32px">
+<div style="display: flex; flex-direction: column; gap: 14px; font-size: 13px; font-variation-settings: 'MONO' 1, 'CASL' 1; color: #5B6170">
+<div style="color: #1E2230; font-weight: 700">page 14</div>
+<a href="#read" style="color: #1E2230; text-decoration: none; font-weight: 700; background: linear-gradient(100deg, rgba(120,175,255,0.12) 0%, rgba(120,175,255,0.55) 5%, rgba(120,175,255,0.42) 50%, rgba(120,175,255,0.6) 95%, rgba(120,175,255,0.12) 100%); padding: 2px 4px; margin-left: -4px; align-self: flex-start">1 read</a>
+<a href="#questions" style="color: #5B6170; text-decoration: none">2 questions</a>
+<a href="#short" style="color: #5B6170; text-decoration: none">3 short answer</a>
+<a href="#writing" style="color: #5B6170; text-decoration: none">4 writing</a>
+</div>
+</aside>
+
+<main style="width: 1290px; box-sizing: border-box; padding: 40px 0 0 190px">
+
+<div style="width: 760px; display: flex; align-items: center; justify-content: space-between">
+<a href="#" style="display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 600; color: #3A4256; text-decoration: none">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"></path></svg>
+My lessons</a>
+<div style="display: flex; gap: 8px; font-size: 13px; font-variation-settings: 'MONO' 1, 'CASL' 1; font-weight: 600">
+<span style="padding: 5px 10px; border-radius: 6px; background: #D6E4FF; color: #1A36A8">FR · Français</span>
+<span style="padding: 5px 10px; border-radius: 6px; background: #FFE3EC; color: #8E2352">Intermediate</span>
+<span style="padding: 5px 10px; border: 1.5px dashed #9AA6B4; border-radius: 6px; color: #5B6170">~6 min read</span>
+</div>
+</div>
+
+<h1 id="read" style="width: 760px; margin: 40px 0 8px; font-family: 'Zilla Slab', serif; font-size: 54px; line-height: 1.02; font-weight: 700; letter-spacing: -0.5px">A Brilliant Screenplay and Unexpected Success</h1>
+<p style="margin: 0 0 40px; font-size: 14px; font-variation-settings: 'MONO' 1, 'CASL' 1; color: #5B6170">pasted text · 11 highlighted words · tap one to look it up</p>
+
+<div style="display: flex; gap: 36px; align-items: stretch">
+
+<article lang="fr" style="width: 760px; flex-shrink: 0; position: relative; box-sizing: border-box; padding: 60px 64px 64px; background: #FFFFFF; border-radius: 2px; box-shadow: 0 1px 2px rgba(30,34,48,0.08), 0 18px 40px -24px rgba(30,34,48,0.35)">
+<div style="position: absolute; top: -14px; left: 48px; width: 110px; height: 30px; background: rgba(236,214,158,0.7); transform: rotate(-5deg)"></div>
+<div style="position: absolute; top: -12px; right: 56px; width: 96px; height: 30px; background: rgba(188,214,236,0.75); transform: rotate(4deg)"></div>
+
+<div style="display: flex; flex-direction: column; gap: 22px; font-family: 'Literata', 'Noto Serif JP', serif; font-size: 20px; line-height: 36px; color: #1E2230">
+<h2 style="margin: 0 0 4px; font-family: 'Zilla Slab', serif; font-size: 30px; line-height: 1.15; font-weight: 700">Un <button style="border: 0; margin: 0 -3px; padding: 0 3px; background: linear-gradient(100deg, rgba(120,175,255,0.12) 0%, rgba(120,175,255,0.55) 4%, rgba(120,175,255,0.42) 50%, rgba(120,175,255,0.6) 96%, rgba(120,175,255,0.12) 100%); border-radius: 3px 8px 4px 9px / 8px 4px 9px 3px; cursor: pointer; font-weight: inherit; font-variation-settings: inherit">scénario<svg aria-label="saved" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2B4FD8" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" style="margin-left: 3px; vertical-align: super"><path d="M5 12l5 5 9-10"></path></svg></button> brillant</h2>
+<p style="margin: 0">Dominique allume la lampe et s’assoit. Il boit son café. Enfin, il a une idée.</p>
+<p style="margin: 0">Il commence à taper sur son <button style="border: 0; margin: 0 -3px; padding: 0 3px; background: linear-gradient(100deg, rgba(120,175,255,0.12) 0%, rgba(120,175,255,0.55) 4%, rgba(120,175,255,0.42) 50%, rgba(120,175,255,0.6) 96%, rgba(120,175,255,0.12) 100%); border-radius: 3px 8px 4px 9px / 8px 4px 9px 3px; cursor: pointer; line-height: 30px">ordinateur portable</button>. Il écrit un scénario pour un film.</p>
+<p style="margin: 0">« Tout est silencieux », écrit-il. « Le garde de sécurité dort. Les lettres secrètes sont sur le bureau. L’espionne <button style="border: 0; margin: 0 -3px; padding: 0 3px; background: linear-gradient(100deg, rgba(255,140,180,0.12) 0%, rgba(255,140,180,0.5) 4%, rgba(255,140,180,0.38) 50%, rgba(255,140,180,0.55) 96%, rgba(255,140,180,0.12) 100%); border-radius: 3px 8px 4px 9px / 8px 4px 9px 3px; cursor: pointer; line-height: 30px">s’approche</button>. <button style="border: 0; margin: 0 -3px; padding: 0 3px; background: linear-gradient(100deg, rgba(120,210,140,0.12) 0%, rgba(120,210,140,0.55) 4%, rgba(120,210,140,0.42) 50%, rgba(120,210,140,0.6) 96%, rgba(120,210,140,0.12) 100%); border-radius: 3px 8px 4px 9px / 8px 4px 9px 3px; cursor: pointer; line-height: 30px">Silencieusement</button>, elle — »</p>
+<p style="margin: 0">Boum ! Dominique <button style="border: 0; margin: 0 -3px; padding: 0 3px; background: linear-gradient(100deg, rgba(255,140,180,0.12) 0%, rgba(255,140,180,0.5) 4%, rgba(255,140,180,0.38) 50%, rgba(255,140,180,0.55) 96%, rgba(255,140,180,0.12) 100%); border-radius: 3px 8px 4px 9px / 8px 4px 9px 3px; cursor: pointer; line-height: 30px">sursaute<svg aria-label="saved" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2B4FD8" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" style="margin-left: 3px; vertical-align: super"><path d="M5 12l5 5 9-10"></path></svg></button>. Le café <button style="border: 0; margin: 0 -3px; padding: 0 3px; background: linear-gradient(100deg, rgba(255,140,180,0.12) 0%, rgba(255,140,180,0.5) 4%, rgba(255,140,180,0.38) 50%, rgba(255,140,180,0.55) 96%, rgba(255,140,180,0.12) 100%); border-radius: 3px 8px 4px 9px / 8px 4px 9px 3px; cursor: pointer; line-height: 30px">se renverse</button> sur l’ordinateur portable. L’ordinateur cesse de fonctionner. L’écran affiche : « Erreur ! »</p>
+<p style="margin: 0">Il y a des lumières vertes et jaunes derrière la fenêtre. Des gens <button style="border: 0; margin: 0 -3px; padding: 0 3px; background: linear-gradient(100deg, rgba(255,140,180,0.12) 0%, rgba(255,140,180,0.5) 4%, rgba(255,140,180,0.38) 50%, rgba(255,140,180,0.55) 96%, rgba(255,140,180,0.12) 100%); border-radius: 3px 8px 4px 9px / 8px 4px 9px 3px; cursor: pointer; line-height: 30px">applaudissent</button>. La voisine de Dominique fait la fête. C’est une <button style="border: 0; margin: 0 -3px; padding: 0 3px; background: linear-gradient(100deg, rgba(120,175,255,0.12) 0%, rgba(120,175,255,0.55) 4%, rgba(120,175,255,0.42) 50%, rgba(120,175,255,0.6) 96%, rgba(120,175,255,0.12) 100%); border-radius: 3px 8px 4px 9px / 8px 4px 9px 3px; cursor: pointer; line-height: 30px">réalisatrice<svg aria-label="saved" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2B4FD8" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" style="margin-left: 3px; vertical-align: super"><path d="M5 12l5 5 9-10"></path></svg></button> célèbre. Boum ! Un autre <button style="border: 0; margin: 0 -3px; padding: 0 3px; background: linear-gradient(100deg, rgba(120,175,255,0.12) 0%, rgba(120,175,255,0.55) 4%, rgba(120,175,255,0.42) 50%, rgba(120,175,255,0.6) 96%, rgba(120,175,255,0.12) 100%); border-radius: 3px 8px 4px 9px / 8px 4px 9px 3px; cursor: pointer; line-height: 30px">feu d’artifice</button> explose dans le jardin de la réalisatrice.</p>
+<p style="margin: 0">« Quelle idée brillante, Dominique, de faire le film ici, dans mon jardin ! Tout le monde est prêt : on commence aujourd’hui. Je sais, on travaille trop… mais on fait aussi beaucoup la fête ! Dominique ? Ça va ? »</p>
+<p style="margin: 0">Le lendemain, la réalisatrice vient <button style="border: 0; margin: 0 -3px; padding: 0 3px; background: linear-gradient(100deg, rgba(255,140,180,0.12) 0%, rgba(255,140,180,0.5) 4%, rgba(255,140,180,0.38) 50%, rgba(255,140,180,0.55) 96%, rgba(255,140,180,0.12) 100%); border-radius: 3px 8px 4px 9px / 8px 4px 9px 3px; cursor: pointer; line-height: 30px">s’excuser</button>. Elle veut lire son scénario. Mais il lui ferme la porte. Finalement, la réalisatrice de « L’Excuse » est <button aria-expanded="true" style="border: 0; margin: 0 -3px; padding: 0 3px; background: linear-gradient(100deg, rgba(255,215,90,0.3) 0%, rgba(255,215,90,0.9) 4%, rgba(255,215,90,0.8) 50%, rgba(255,215,90,0.95) 96%, rgba(255,215,90,0.3) 100%); border-radius: 3px 8px 4px 9px / 8px 4px 9px 3px; cursor: pointer; line-height: 30px; box-shadow: inset 0 -2.5px 0 #2B4FD8">désolée</button>. Fin. »</p>
+</div>
+</article>
+
+<aside style="width: 280px; display: flex; flex-direction: column; justify-content: space-between; padding: 8px 0 40px">
+
+<div style="display: flex; flex-direction: column; gap: 12px; font-size: 14px; font-variation-settings: 'MONO' 1, 'CASL' 1; color: #1E2230">
+<div style="font-weight: 700; margin-bottom: 2px">highlighter key</div>
+<div style="display: flex; align-items: center; gap: 12px"><span style="width: 40px; height: 16px; background: linear-gradient(100deg, rgba(120,175,255,0.12) 0%, rgba(120,175,255,0.55) 6%, rgba(120,175,255,0.42) 50%, rgba(120,175,255,0.6) 94%, rgba(120,175,255,0.12) 100%); border-radius: 3px 8px 4px 9px / 8px 4px 9px 3px"></span><span style="flex-grow: 1">nouns</span><span style="color: #5B6170">4</span></div>
+<div style="display: flex; align-items: center; gap: 12px"><span style="width: 40px; height: 16px; background: linear-gradient(100deg, rgba(255,140,180,0.12) 0%, rgba(255,140,180,0.5) 6%, rgba(255,140,180,0.38) 50%, rgba(255,140,180,0.55) 94%, rgba(255,140,180,0.12) 100%); border-radius: 3px 8px 4px 9px / 8px 4px 9px 3px"></span><span style="flex-grow: 1">verbs</span><span style="color: #5B6170">5</span></div>
+<div style="display: flex; align-items: center; gap: 12px"><span style="width: 40px; height: 16px; background: linear-gradient(100deg, rgba(255,215,90,0.15) 0%, rgba(255,215,90,0.65) 6%, rgba(255,215,90,0.5) 50%, rgba(255,215,90,0.7) 94%, rgba(255,215,90,0.15) 100%); border-radius: 3px 8px 4px 9px / 8px 4px 9px 3px"></span><span style="flex-grow: 1">adjectives</span><span style="color: #5B6170">1</span></div>
+<div style="display: flex; align-items: center; gap: 12px"><span style="width: 40px; height: 16px; background: linear-gradient(100deg, rgba(120,210,140,0.12) 0%, rgba(120,210,140,0.55) 6%, rgba(120,210,140,0.42) 50%, rgba(120,210,140,0.6) 94%, rgba(120,210,140,0.12) 100%); border-radius: 3px 8px 4px 9px / 8px 4px 9px 3px"></span><span style="flex-grow: 1">adverbs</span><span style="color: #5B6170">1</span></div>
+<div style="display: flex; align-items: center; gap: 8px; margin-top: 6px; color: #5B6170"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2B4FD8" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"></path></svg>3 saved to your words</div>
+</div>
+
+<div role="dialog" aria-label="désolée — definition" style="position: relative; width: 280px; background: #FFFFFF; transform: rotate(1deg); box-shadow: 0 1px 2px rgba(30,34,48,0.1), 0 16px 30px -18px rgba(30,34,48,0.4); margin-bottom: 30px">
+<div style="position: absolute; left: -12px; top: 30px; width: 0; height: 0; border-top: 10px solid transparent; border-bottom: 10px solid transparent; border-right: 12px solid #FFFFFF"></div>
+<div style="position: absolute; top: -13px; left: 96px; width: 88px; height: 26px; background: rgba(236,214,158,0.75); transform: rotate(-3deg)"></div>
+<div lang="fr" style="padding: 20px 20px 10px; border-bottom: 3px solid rgba(255,215,90,0.85); display: flex; align-items: flex-start; justify-content: space-between">
+<div>
+<div style="font-family: 'Zilla Slab', serif; font-size: 32px; line-height: 1.05; font-weight: 700">désolée</div>
+<span lang="en" style="display: inline-block; margin-top: 6px; padding: 2px 8px; border-radius: 5px; background: #FFF1C4; color: #7A5A00; font-size: 12px; font-weight: 700; font-variation-settings: 'MONO' 1, 'CASL' 1">adjective</span>
+</div>
+<button aria-label="Close definition" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: 0; background: transparent; cursor: pointer; color: #5B6170">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+</button>
+</div>
+<div style="padding: 6px 20px 20px; background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 29px, #DCE7F3 29px, #DCE7F3 30px); line-height: 30px; font-family: 'Literata', serif; font-size: 15px">
+<div style="font-size: 18px; font-weight: 700; color: #2B4FD8">sorry, apologetic</div>
+<div style="font-family: 'Recursive', sans-serif; font-size: 12px; font-variation-settings: 'MONO' 1, 'CASL' 1; color: #5B6170">base form: désolé · feminine here</div>
+<div style="color: #3A3F4C">Feeling or expressing regret, sadness, or apology for something.</div>
+<div lang="fr" style="font-style: italic; color: #3A3F4C">« La réalisatrice est désolée d’avoir fait trop de bruit. »</div>
+<button style="display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 7px 14px; font-family: 'Recursive', sans-serif; font-size: 15px; font-weight: 700; color: #1A36A8; background: #EEF3FF; border: 1.5px solid #2B4FD8; border-radius: 8px; cursor: pointer">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>Save word</button>
+</div>
+</div>
+
+</aside>
+</div>
+
+<section id="questions" style="width: 760px; margin-top: 96px">
+<span style="display: inline-block; padding: 3px 10px; border-radius: 6px; background: #D6E4FF; color: #1A36A8; font-size: 13px; font-variation-settings: 'MONO' 1, 'CASL' 1; font-weight: 700">part 2 · 5 questions</span>
+<h2 style="margin: 10px 0 36px; font-family: 'Zilla Slab', serif; font-size: 38px; font-weight: 700; letter-spacing: -0.3px">Did you follow the story?</h2>
+
+<fieldset lang="fr" style="border: 0; margin: 0 0 44px; padding: 0; display: flex; flex-direction: column; gap: 12px">
+<legend style="padding: 0; margin-bottom: 16px; font-family: 'Literata', serif; font-size: 20px; font-weight: 600; display: flex; gap: 12px"><span style="font-family: 'Recursive', sans-serif; font-variation-settings: 'MONO' 1, 'CASL' 1; color: #2B4FD8">1.</span>Pourquoi l’ordinateur portable de Dominique cesse-t-il de fonctionner ?</legend>
+<label style="display: flex; align-items: center; gap: 16px; padding: 14px 18px; background: #FFFFFF; border: 1.5px solid #CCD5DF; border-radius: 12px; font-family: 'Literata', serif; font-size: 18px; cursor: pointer"><input type="radio" name="q1" style="position: absolute; opacity: 0; width: 1px; height: 1px"><span style="width: 30px; height: 30px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #F2F6FC; border: 1.5px solid #AFC0DA; color: #3A4256; border-radius: 7px 5px 8px 6px; font-family: 'Recursive', sans-serif; font-size: 14px; font-weight: 800; font-variation-settings: 'MONO' 1, 'CASL' 1">A</span>Parce que la réalisatrice a fermé la porte</label>
+<label style="display: flex; align-items: center; gap: 16px; padding: 14px 18px; background: #EEF3FF; border: 2px solid #2B4FD8; border-radius: 12px; font-family: 'Literata', serif; font-size: 18px; font-weight: 600; color: #16244F; box-shadow: 3px 3px 0 #C3D3FA; cursor: pointer"><input type="radio" name="q1" checked style="position: absolute; opacity: 0; width: 1px; height: 1px"><span style="width: 30px; height: 30px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #2B4FD8; color: #FFFFFF; border: 1.5px solid #2B4FD8; border-radius: 7px 5px 8px 6px; font-family: 'Recursive', sans-serif; font-size: 14px; font-weight: 800; font-variation-settings: 'MONO' 1, 'CASL' 1">B</span>Parce que le café se renverse dessus</label>
+<label style="display: flex; align-items: center; gap: 16px; padding: 14px 18px; background: #FFFFFF; border: 1.5px solid #CCD5DF; border-radius: 12px; font-family: 'Literata', serif; font-size: 18px; cursor: pointer"><input type="radio" name="q1" style="position: absolute; opacity: 0; width: 1px; height: 1px"><span style="width: 30px; height: 30px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #F2F6FC; border: 1.5px solid #AFC0DA; color: #3A4256; border-radius: 7px 5px 8px 6px; font-family: 'Recursive', sans-serif; font-size: 14px; font-weight: 800; font-variation-settings: 'MONO' 1, 'CASL' 1">C</span>Parce qu’il y a un feu d’artifice dans le jardin</label>
+<label style="display: flex; align-items: center; gap: 16px; padding: 14px 18px; background: #FFFFFF; border: 1.5px solid #CCD5DF; border-radius: 12px; font-family: 'Literata', serif; font-size: 18px; cursor: pointer"><input type="radio" name="q1" style="position: absolute; opacity: 0; width: 1px; height: 1px"><span style="width: 30px; height: 30px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #F2F6FC; border: 1.5px solid #AFC0DA; color: #3A4256; border-radius: 7px 5px 8px 6px; font-family: 'Recursive', sans-serif; font-size: 14px; font-weight: 800; font-variation-settings: 'MONO' 1, 'CASL' 1">D</span>Parce que Dominique l’éteint intentionnellement</label>
+</fieldset>
+
+<fieldset lang="fr" style="border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px">
+<legend style="padding: 0; margin-bottom: 16px; font-family: 'Literata', serif; font-size: 20px; font-weight: 600; display: flex; gap: 12px"><span style="font-family: 'Recursive', sans-serif; font-variation-settings: 'MONO' 1, 'CASL' 1; color: #2B4FD8">2.</span>Qui est la voisine de Dominique ?</legend>
+<label style="display: flex; align-items: center; gap: 16px; padding: 14px 18px; background: #FFFFFF; border: 1.5px solid #CCD5DF; border-radius: 12px; font-family: 'Literata', serif; font-size: 18px; cursor: pointer"><input type="radio" name="q2" style="position: absolute; opacity: 0; width: 1px; height: 1px"><span style="width: 30px; height: 30px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #F2F6FC; border: 1.5px solid #AFC0DA; color: #3A4256; border-radius: 7px 5px 8px 6px; font-family: 'Recursive', sans-serif; font-size: 14px; font-weight: 800; font-variation-settings: 'MONO' 1, 'CASL' 1">A</span>Une espionne célèbre</label>
+<label style="display: flex; align-items: center; gap: 16px; padding: 14px 18px; background: #FFFFFF; border: 1.5px solid #CCD5DF; border-radius: 12px; font-family: 'Literata', serif; font-size: 18px; cursor: pointer"><input type="radio" name="q2" style="position: absolute; opacity: 0; width: 1px; height: 1px"><span style="width: 30px; height: 30px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #F2F6FC; border: 1.5px solid #AFC0DA; color: #3A4256; border-radius: 7px 5px 8px 6px; font-family: 'Recursive', sans-serif; font-size: 14px; font-weight: 800; font-variation-settings: 'MONO' 1, 'CASL' 1">B</span>Une écrivaine de scénarios</label>
+<label style="display: flex; align-items: center; gap: 16px; padding: 14px 18px; background: #FFFFFF; border: 1.5px solid #CCD5DF; border-radius: 12px; font-family: 'Literata', serif; font-size: 18px; cursor: pointer"><input type="radio" name="q2" style="position: absolute; opacity: 0; width: 1px; height: 1px"><span style="width: 30px; height: 30px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #F2F6FC; border: 1.5px solid #AFC0DA; color: #3A4256; border-radius: 7px 5px 8px 6px; font-family: 'Recursive', sans-serif; font-size: 14px; font-weight: 800; font-variation-settings: 'MONO' 1, 'CASL' 1">C</span>Une réalisatrice célèbre</label>
+<label style="display: flex; align-items: center; gap: 16px; padding: 14px 18px; background: #FFFFFF; border: 1.5px solid #CCD5DF; border-radius: 12px; font-family: 'Literata', serif; font-size: 18px; cursor: pointer"><input type="radio" name="q2" style="position: absolute; opacity: 0; width: 1px; height: 1px"><span style="width: 30px; height: 30px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #F2F6FC; border: 1.5px solid #AFC0DA; color: #3A4256; border-radius: 7px 5px 8px 6px; font-family: 'Recursive', sans-serif; font-size: 14px; font-weight: 800; font-variation-settings: 'MONO' 1, 'CASL' 1">D</span>Une gardienne de sécurité</label>
+</fieldset>
+</section>
+
+<section id="short" style="width: 760px; margin-top: 96px">
+<span style="display: inline-block; padding: 3px 10px; border-radius: 6px; background: #FFE3EC; color: #8E2352; font-size: 13px; font-variation-settings: 'MONO' 1, 'CASL' 1; font-weight: 700">part 3 · short answer</span>
+<h2 style="margin: 10px 0 32px; font-family: 'Zilla Slab', serif; font-size: 38px; font-weight: 700; letter-spacing: -0.3px">In your own words</h2>
+<label for="sa1" lang="fr" style="display: flex; gap: 12px; margin-bottom: 16px; font-family: 'Literata', serif; font-size: 20px; font-weight: 600"><span style="font-family: 'Recursive', sans-serif; font-variation-settings: 'MONO' 1, 'CASL' 1; color: #2B4FD8">1.</span>Pourquoi Dominique ferme-t-il la porte à la réalisatrice ?</label>
+<textarea id="sa1" lang="fr" rows="4" style="display: block; width: 100%; box-sizing: border-box; height: 158px; padding: 6px 20px; resize: none; font-family: 'Literata', serif; font-size: 18px; line-height: 36px; border: 2px solid #2B4FD8; border-radius: 12px; box-shadow: 0 0 0 4px #DCE6FF; background-color: #FFFFFF; background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 41px, #D5E3F1 41px, #D5E3F1 42px); background-position: 0 -6px; outline: none">Parce qu’il est fâché : elle a fait trop de bruit pendant la fête et son café s’est renversé sur</textarea>
+</section>
+
+<section id="writing" style="width: 760px; margin-top: 96px">
+<span style="display: inline-block; padding: 3px 10px; border-radius: 6px; background: #D9F2DF; color: #1D6334; font-size: 13px; font-variation-settings: 'MONO' 1, 'CASL' 1; font-weight: 700">part 4 · writing</span>
+<h2 style="margin: 10px 0 32px; font-family: 'Zilla Slab', serif; font-size: 38px; font-weight: 700; letter-spacing: -0.3px">Keep the story going</h2>
+<label for="w1" lang="fr" style="display: block; margin-bottom: 16px; font-family: 'Literata', serif; font-size: 20px; font-weight: 600; line-height: 1.45">Imaginez la suite : que se passe-t-il quand la réalisatrice lit enfin le scénario de Dominique ?</label>
+<textarea id="w1" lang="fr" style="display: block; width: 100%; box-sizing: border-box; height: 240px; padding: 6px 20px; resize: none; font-family: 'Literata', serif; font-size: 18px; line-height: 36px; border: 1.5px solid #CCD5DF; border-radius: 12px; background-color: #FFFFFF; background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 41px, #D5E3F1 41px, #D5E3F1 42px); background-position: 0 -6px; outline: none">Une semaine plus tard, la réalisatrice frappe encore à la porte. Cette fois, Dominique ouvre. Elle lit le scénario dans le jardin, sous les lumières. Elle rit beaucoup. « C’est parfait ! » dit-elle. Ils décident de faire le film ensemble.</textarea>
+<div style="display: flex; align-items: center; gap: 14px; margin-top: 14px; font-size: 14px; font-variation-settings: 'MONO' 1, 'CASL' 1; color: #5B6170">
+<div style="position: relative; width: 180px; height: 10px; border: 1.5px solid #AFC0DA; border-radius: 6px; background: #FFFFFF; overflow: hidden">
+<div style="position: absolute; left: 0; top: 0; bottom: 0; width: 34%; background: #FFE08A"></div>
+<div style="position: absolute; left: 66.6%; top: 0; bottom: 0; width: 1.5px; background: #3A4256"></div>
+</div>
+<span><b style="color: #1E2230">40 words</b> · aim for 80–120</span>
+</div>
+</section>
+
+<div style="width: 760px; margin-top: 72px; padding-top: 28px; border-top: 1.5px dashed #9AA6B4; display: flex; align-items: center; justify-content: space-between">
+<span style="display: flex; align-items: center; gap: 8px; font-size: 14px; font-variation-settings: 'MONO' 1, 'CASL' 1; color: #5B6170">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2F8A4C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"></path></svg>
+draft saved · 3 of 5 questions answered</span>
+<a href="02-results.html" style="display: flex; align-items: center; gap: 10px; padding: 16px 28px; background: #2B4FD8; color: #FFFFFF; text-decoration: none; border-radius: 12px; font-family: 'Literata', serif; font-size: 18px; font-weight: 750; font-variation-settings: 'CASL' 1; box-shadow: 4px 4px 0 #FFE08A">Hand it in
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a>
+</div>
+
+</main>
+</div>
+</div>
+</body>
+</html>

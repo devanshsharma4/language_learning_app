@@ -32,33 +32,36 @@ export default class ErrorBoundary extends Component<Props, State> {
     const { error } = this.state;
     if (!error) return this.props.children;
 
+    /*
+     * Deliberately plain markup and no imported components: this renders only
+     * after something below it has already thrown, so it must not depend on
+     * anything that could throw too. The tokens are Tailwind classes, which
+     * are just CSS by the time they get here.
+     */
     return (
-      <div className="min-h-screen bg-cream font-body flex items-center justify-center px-6">
+      <div className="notebook-grid flex min-h-screen items-center justify-center px-6">
         <div className="max-w-md text-center">
-          <h1 className="font-display text-3xl font-semibold text-bark mb-3">
-            Something broke on our end
+          <h1 className="mb-3 font-display text-[28px] font-bold text-ink">
+            Something tore on our end
           </h1>
-          <p className="text-bark-light mb-6">
-            This page hit an unexpected error. Reloading usually clears it — your saved lessons
-            and notes are unaffected.
+          <p className="mb-7 text-[15px] leading-relaxed text-ink-2">
+            This page hit an unexpected error. Reloading usually clears it — your lessons,
+            words and notes are unaffected.
           </p>
-          <div className="flex items-center justify-center gap-4">
+          <div className="flex items-center justify-center gap-5">
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="bg-sage hover:bg-sage-dark active:bg-olive text-white font-semibold rounded-2xl px-5 py-2.5 shadow-md hover:shadow-lg transition-all duration-200"
+              className="casual rounded-xl bg-pen px-6 py-3 text-base font-750 text-white shadow-sticker hover:bg-pen-dark"
             >
               Reload the page
             </button>
-            <a
-              href="/dashboard"
-              className="text-sage-dark hover:text-olive transition-colors duration-200"
-            >
-              Back to Dashboard
+            <a href="/dashboard" className="text-[15px] font-650 text-pen no-underline hover:underline">
+              Back to your notebook
             </a>
           </div>
           {import.meta.env.DEV && (
-            <pre className="mt-8 text-left text-xs text-terracotta bg-white border border-sand rounded-xl p-4 overflow-x-auto">
+            <pre className="mt-8 overflow-x-auto rounded-xl border-[1.5px] border-line bg-white p-4 text-left text-xs text-wrong-text">
               {error.message}
             </pre>
           )}

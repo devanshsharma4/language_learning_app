@@ -20,17 +20,34 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+/**
+ * Endpoints where a 401 is an answer, not an expired session.
+ *
+ * `/auth/login` and `/auth/register` 401 when the credentials are simply wrong;
+ * `/auth/me` 401s when a stored token has expired, which `RequireAuth` handles
+ * by redirecting through the router so the intended route and in-flight page
+ * state both survive.
+ *
+ * Without this list a failed login hard-reloaded the page, wiping the form and
+ * the "that password doesn't match" message before anyone could read it — so a
+ * typo looked like the button simply not working.
+ */
+const AUTH_ENDPOINTS = ['/auth/me', '/auth/login', '/auth/register'];
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
+      const url: string = error.config?.url ?? '';
+      const isAuthEndpoint = AUTH_ENDPOINTS.some((path) => url.includes(path));
 
-      // /auth/me is the token check RequireAuth performs on mount. Let the
-      // guard redirect through the router so the target route is preserved and
-      // in-flight page state survives; a hard reload here would discard both.
-      const isAuthCheck = error.config?.url?.includes('/auth/me');
-      if (!isAuthCheck) {
+      // Only clear the token for a session that has actually gone stale. A
+      // rejected sign-in attempt never had one to clear.
+      if (!isAuthEndpoint || url.includes('/auth/me')) {
+        localStorage.removeItem('token');
+      }
+
+      if (!isAuthEndpoint) {
         window.location.href = '/login';
       }
     }
