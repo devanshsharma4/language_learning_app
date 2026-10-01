@@ -68,6 +68,26 @@ function questionLanguageRule(language: string, difficulty: string): string {
     : `LANGUAGE REQUIREMENT (strict): Write every question and every answer option in ${language}, not in English. This learner reads ${language} at a ${difficulty} level.`;
 }
 
+/**
+ * The same rule for *vocabulary* MCQs, where it has to run the other way round.
+ *
+ * `questionLanguageRule` puts a beginner's whole question in English, options
+ * included. On a comprehension question that is right. On a vocabulary question
+ * it destroys the exercise: asked "what does the word for X mean?" in English
+ * with four English glosses, the answer is a paraphrase of the question and the
+ * target-language word never appears. It tested reading the question.
+ *
+ * So for beginners the prompt is in English and the four options are the
+ * ${language} words themselves — the learner reads a meaning and picks the word
+ * that carries it. Intermediate and advanced keep both sides in the target
+ * language, which is the same exercise with the support removed.
+ */
+function vocabQuestionLanguageRule(language: string, difficulty: string): string {
+  return questionLanguage(language, difficulty) === 'English'
+    ? `LANGUAGE REQUIREMENT (strict): Write every question in ENGLISH — this learner cannot yet read ${language} fluently. But every answer option MUST be a ${language} word, never an English translation. The point of the exercise is to recognise the ${language} word from its meaning, so if the options are in English the question tests nothing.`
+    : `LANGUAGE REQUIREMENT (strict): Write every question and every answer option in ${language}, not in English. This learner reads ${language} at a ${difficulty} level.`;
+}
+
 export const promptTemplates = {
   vocabularyExtraction: (text: string, language: string, difficulty: string) => `
     You are a language learning assistant. Extract key vocabulary words from the following ${language} text for a ${difficulty} level learner.
@@ -172,9 +192,24 @@ export const promptTemplates = {
     difficulty: string
   ) => {
     const count = difficulty === 'beginner' ? 4 : 5;
+    const beginner = questionLanguage(language, difficulty) === 'English';
     const wordList = vocabularyWords
       .map(v => `- ${v.word} (${v.translation}): ${v.explanation}`)
       .join('\n');
+
+    // Both shapes ask the learner to go from meaning to word. The beginner form
+    // states the meaning in English; the other states it in the target language.
+    const questionShape = beginner
+      ? `- Each question gives the MEANING in English and asks which ${language} word carries it,
+        e.g. "Which word means 'to invent or discover something new'?"
+      - Alternatively, give an English sentence with a blank where the ${language} word belongs
+      - All 4 options are ${language} words. Use the word being tested as the correct option and
+        three OTHER words from the list above as distractors. Never put an English gloss in an option.`
+      : `- Each question states the MEANING in ${language} and asks which word carries it,
+        or gives a ${language} sentence with a blank where the word belongs
+      - All 4 options are ${language} words — never definitions, and never English. An option
+        that restates the question is not a test: if the question asks "which word means the art
+        of making films", the options must be words, not "the art of making films".`;
 
     return `
       You are a language learning assistant. Generate ${count} multiple-choice vocabulary questions to test a ${difficulty} level learner's understanding of these ${language} words.
@@ -182,13 +217,13 @@ export const promptTemplates = {
       Vocabulary words:
       ${wordList}
 
-      ${questionLanguageRule(language, difficulty)}
+      ${vocabQuestionLanguageRule(language, difficulty)}
 
       Select ${count} words from the list above and create one question per word. For each question:
-      - Ask what the word means in context, or present a sentence with a blank for the word
+      ${questionShape}
       - Provide exactly 4 options
-      - Do NOT name the word being tested in the question text itself unless the question
-        is a fill-in-the-blank; the "word" field records it separately
+      - Do NOT name the word being tested in the question text itself; the "word" field
+        records it separately. A question that contains its own answer tests nothing.
       - Make distractor options plausible (related words, similar meanings, common confusions)
       - Only one option should be correct
       - Use IDs: "vq1", "vq2", etc.
