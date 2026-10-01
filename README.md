@@ -35,6 +35,9 @@ you learn a word in the sentence that taught it to you.
 ### Generating a lesson — four AI calls, deliberately shaped
 
 ```
+link ──> pick the article body ──┐   (only for URLs; skipped for pasted text
+                                 │    and for Wikipedia, which needs no filtering)
+                                 v
 article ──┬─ extract vocabulary ──────┐
           ├─ comprehension questions  │  run in parallel
           └─ writing prompts ─────────┘
@@ -44,6 +47,9 @@ article ──┬─ extract vocabulary ──────┐
 Three calls run concurrently; the fourth is sequential because it needs the extracted
 vocabulary as input. Everything merges into one `LessonQuestion[]` stored as JSONB on a
 single `lessons` row.
+
+A fifth call goes first when the article came from a link — it decides which of the
+scraped text blocks are the article, which is what the other four then get spent on.
 
 ### Grading — split on purpose
 
@@ -97,17 +103,34 @@ highlighted — so `désolé` still marks `désolée`. The server verifies the s
 actually occurs in the text and drops it if not, falling back to matching the base form.
 This was previously a known limitation: a lemma the article never spells never highlighted.
 
-**Article extraction tries two strategies.** Mozilla's Readability (the Firefox Reader Mode
-algorithm) runs first; a regex extractor is the fallback. The regex extractor *scores*
-candidate containers and picks the best, rather than taking the first match — a first-match
-version once truncated a 31k-character page to 289 characters of navbar.
+**The article body is chosen by a model, because tags can't do it.** Readability finds the
+right region of a page; it doesn't promise that region is only prose. Captions, newsletter
+forms and clipboard toasts come with it, and one French reading site shipped
+*"please consider making a donation"* — in English — straight into a lesson.
+
+A structural rule can't fix that: the tag that holds an infobox on one site holds the
+article on another. A rule dropping `<table>` was tried and deleted the article on
+lawlessfrench.com, which lays its text out in a table and puts its donation plea outside
+`<article>`. So the scraped paragraphs are numbered and handed to Haiku, which keeps the
+ones that are the article. If it fails or tries to drop most of the text, nothing is
+filtered — a filter that eats the article is worse than one that leaves a stray line in.
+
+**Wikipedia skips all of that.** Those links are read through the Wikipedia API, which
+returns the body as data — no guessing, no filter call, nothing to get wrong. It's the one
+source guaranteed to come through clean, and the Dashboard recommends it first.
+
+**A page that isn't an article is refused, with a reason.** Homepages (measured by link
+density and paragraph length), bot-challenge pages — Le Monde serves one with HTTP 200, so
+`response.ok` passes and a Cloudflare notice used to become a lesson — and paywalls, which
+get told apart from typos and dead links. `npm run check:extraction` pins every one of
+these against the live pages that produced them.
 
 **SSRF is handled properly.** `/api/lessons/create` fetches a user-supplied URL, so the
 hostname is resolved and every resulting address is checked against loopback, private,
 link-local (cloud metadata at `169.254.169.254`) and CGNAT ranges — IPv4 and IPv6, including
 decimal-encoded forms. Checking the protocol alone stops none of those.
 
-**Rate limiting is keyed on user id, not IP.** Each lesson costs four Claude calls, so the
+**Rate limiting is keyed on user id, not IP.** Each lesson costs four or five Claude calls, so the
 spend is per account. IP keying gets this backwards: it punishes users sharing a NAT and
 lets one user on many addresses spend freely.
 
@@ -225,6 +248,7 @@ required, send `[]` if empty.
 | `JWT_SECRET` | yes | 32+ characters |
 | `ANTHROPIC_API_KEY` | yes | server-side only, never reaches the browser |
 | `CORS_ORIGIN` | production | comma-separated allowed origins |
+| `JINA_API_KEY` | no | hosted-reader fallback for JavaScript-rendered pages; sends the URL to a third party |
 | `PORT` | no | default 3001 |
 | `NODE_ENV` | no | `production` enables Postgres TLS and trust-proxy |
 
@@ -237,14 +261,22 @@ handles it.
 
 Honest list — these are known, not undiscovered.
 
-- **No caching of AI responses.** The same article reprocessed costs four fresh calls.
-  Should be keyed on (article hash, language, difficulty). This is the single biggest
-  remaining cost win — see [docs/SCALE.md](docs/SCALE.md).
-- **No test suite.** `npm test` is a stub; `./test-api.sh` covers the API path manually.
-  Coverage should start with LLM output validation and the auth flow.
+- **No caching of AI responses.** The same article reprocessed costs four fresh calls, five
+  from a link. Should be keyed on (article hash, language, difficulty). This is the single
+  biggest remaining cost win — see [docs/SCALE.md](docs/SCALE.md).
+- **Extraction is not guaranteed, and can't be.** HTML carries no marker meaning "this is the
+  article"; every extractor is inferring from layout. The pipeline above removes the failures
+  that were found and refuses pages it can't read, but a site nobody has tried can still
+  surprise it. Pasting the text always works.
+- **Paywalled and JavaScript-rendered pages need pasting.** A subscriber-only article returns
+  402 however it's fetched. Pages that build themselves in the browser only work if the
+  optional `JINA_API_KEY` hosted-reader fallback is configured.
+- **No test suite.** `npm test` is a stub; `./test-api.sh` covers the API path and
+  `npm run check:extraction` covers URL extraction, both against live services.
+  Unit coverage should start with LLM output validation, the auth flow, and the pure
+  extraction helpers.
 - **Frontend types are hand-mirrored** from `src/types/models.ts` with nothing enforcing
   agreement. This already caused one bug.
-- **No response caching.** The same article reprocessed is four fresh Claude calls.
 - **Accessibility is incomplete.** Keyboard focus and MCQ semantics are fixed; a full pass
   (labels, live regions) is in progress.
 - **Not responsive yet.** Desktop-first; a mobile pass is the current work.
