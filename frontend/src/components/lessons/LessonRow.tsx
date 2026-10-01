@@ -63,7 +63,10 @@ export default function LessonRow({ lesson, page, onDelete, deleting }: LessonRo
         focus-within:border-line focus-within:bg-white focus-within:shadow-[0_10px_20px_-16px_rgba(30,34,48,0.4)] focus-within:after:hidden
         ${/* An open menu holds the row lifted, so the pointer can wander off it
              without the card dropping out from under the menu. */ ''}
-        ${menuOpen ? 'z-10 border-line bg-white shadow-[0_10px_20px_-16px_rgba(30,34,48,0.4)] after:hidden' : ''}
+        ${/* z-20 beats the z-10 on every other row's score cell. At z-10 the row
+             tied with them and lost on DOM order, so the next row's "continue"
+             chip painted straight through the open menu. */ ''}
+        ${menuOpen ? 'z-20 border-line bg-white shadow-[0_10px_20px_-16px_rgba(30,34,48,0.4)] after:hidden' : ''}
         ${deleting ? 'opacity-40' : ''}`}
     >
       <span className="mono text-[13px] text-ink-3">p.{page}</span>
