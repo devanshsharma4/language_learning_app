@@ -13,10 +13,12 @@ import {
   languageNativeName,
   isDifficulty,
   type Difficulty,
+  type Language,
 } from '../lib/languages';
 import { Button, NotebookPage, Spinner, StickyNote, Tape, TopNav } from '../components/notebook';
 import { LanguageCard, LevelPicker, StepLabel } from '../components/dashboard/Steps';
 import { RecentLessons, RecentWords } from '../components/dashboard/NotebookAside';
+import ReadingSources from '../components/dashboard/ReadingSources';
 
 const DIFFICULTY_STORAGE_KEY = 'difficulty';
 
@@ -307,12 +309,19 @@ export default function Dashboard() {
                   </div>
                 )}
               </div>
+
+              {/* Only alongside the link field. Someone pasting text already
+                  has their article and does not need somewhere to look. */}
+              {source === 'link' && !error && <ReadingSources language={language as Language} />}
             </div>
 
             {error && (
-              <p className="m-0 rounded-xl border-[1.5px] border-wrong bg-wrong-tint px-4 py-3 text-sm text-wrong-text">
-                {error}
-              </p>
+              <div className="m-0 rounded-xl border-[1.5px] border-wrong bg-wrong-tint px-4 py-3 text-sm text-wrong-text">
+                <p className="m-0">{error}</p>
+                {source === 'link' && (
+                  <ReadingSources language={language as Language} afterFailure />
+                )}
+              </div>
             )}
 
             <div className="flex flex-wrap items-start gap-6">
