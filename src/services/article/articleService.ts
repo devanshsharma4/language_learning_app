@@ -89,6 +89,12 @@ const INDEX_MEAN_BLOCK_LENGTH = 150;
  */
 const MIN_URL_ARTICLE_LENGTH = 300;
 
+/** `== Heading ==` lines in a Wikipedia plaintext extract. */
+const WIKI_HEADING = /^=+\s.*\s=+$/;
+
+/** Namespaces that are not articles: Special:, Catégorie:, Talk: and friends. */
+const WIKI_NON_ARTICLE = /^[A-Za-zÀ-ÿ_]+:/;
+
 /**
  * Bracketed editorial marks that encyclopedias leave inline: reference numbers
  * and the maintenance tags beside them. They are extraction residue, not words
@@ -148,6 +154,15 @@ export class ArticleService {
   ): Promise<{ title: string; text: string; truncated: boolean }> {
     try {
       await this.assertFetchableUrl(url);
+
+      // Wikipedia publishes its article text as data, so there is nothing to
+      // guess at and no boilerplate to filter. Taken before anything else.
+      const viaWikipedia = await this.extractFromWikipedia(url);
+      if (viaWikipedia) {
+        const { text, truncated } = this.truncateToLimit(viaWikipedia.text);
+        this.validateArticle(text);
+        return { title: viaWikipedia.title, text, truncated };
+      }
 
       const html = await this.fetchArticleHtml(url, language);
       this.assertNotAnInterstitial(html);
@@ -230,6 +245,103 @@ export class ArticleService {
     if (addresses.length === 0 || addresses.some(isPrivateAddress)) {
       throw new AppError(400, 'That URL points to a private address and cannot be fetched.');
     }
+  }
+
+  /**
+   * Wikipedia articles, read from the API instead of scraped.
+   *
+   * This is the one extraction path with nothing to guess at. `explaintext`
+   * returns the article body as plain text -- no infobox, no image captions, no
+   * reference markers, no "[editar datos en Wikidata]" -- so it needs neither
+   * the boilerplate filter nor the article checks, and it costs no LLM call.
+   * That is why the Dashboard recommends Wikipedia first.
+   *
+   * Returns null for anything that is not a Wikipedia article URL, including
+   * `Special:` and other non-article namespaces, which fall through to the
+   * normal pipeline.
+   */
+  private async extractFromWikipedia(
+    url: string
+  ): Promise<{ title: string; text: string } | null> {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return null;
+    }
+
+    const host = parsed.hostname.match(/^([a-z]{2,3}(?:-[a-z]+)?)\.wikipedia\.org$/i);
+    const path = parsed.pathname.match(/^\/wiki\/(.+)$/);
+    if (!host?.[1] || !path?.[1]) return null;
+
+    let title: string;
+    try {
+      title = decodeURIComponent(path[1]).replace(/_/g, ' ');
+    } catch {
+      return null;
+    }
+
+    if (WIKI_NON_ARTICLE.test(title)) return null;
+
+    try {
+      const endpoint = new URL(`https://${host[1]}.wikipedia.org/w/api.php`);
+      endpoint.search = new URLSearchParams({
+        action: 'query',
+        prop: 'extracts',
+        explaintext: '1',
+        // Follow "Baleine" -> whatever it redirects to, as a reader would.
+        redirects: '1',
+        format: 'json',
+        titles: title,
+      }).toString();
+
+      const response = await fetch(endpoint, {
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        headers: { 'User-Agent': BOT_USER_AGENT, Accept: 'application/json' },
+      });
+      if (!response.ok) return null;
+
+      const payload = (await response.json()) as {
+        query?: { pages?: Record<string, { title?: string; extract?: string; missing?: unknown }> };
+      };
+
+      const page = Object.values(payload.query?.pages ?? {})[0];
+      if (!page || page.missing !== undefined || !page.extract) return null;
+
+      const text = this.blocksFromWikiExtract(page.extract).join('\n\n');
+      if (text.length < this.MIN_ARTICLE_LENGTH) return null;
+
+      return { title: page.title?.trim() || 'Untitled Article', text };
+    } catch {
+      // A failure here is not fatal: the page is still a normal URL, and the
+      // scraping path can have a go at it.
+      return null;
+    }
+  }
+
+  /**
+   * Paragraphs from a Wikipedia plaintext extract.
+   *
+   * The extract separates paragraphs with single newlines and marks sections
+   * with `== Heading ==` lines. The headings are navigation, not prose, so they
+   * are dropped rather than read aloud to a learner mid-article.
+   */
+  private blocksFromWikiExtract(extract: string): string[] {
+    const blocks: string[] = [];
+
+    for (const line of extract.split('\n')) {
+      if (blocks.length >= MAX_BLOCKS) break;
+
+      // Same cleanup as the scraped path: the API strips reference markers but
+      // leaves the punctuation around them stranded.
+      const text = this.cleanBlockText(line);
+      if (text.length <= MIN_BLOCK_LENGTH) continue;
+      if (WIKI_HEADING.test(text)) continue;
+
+      blocks.push(text);
+    }
+
+    return blocks;
   }
 
   /**
@@ -444,6 +556,10 @@ export class ArticleService {
       this.normalizeWhitespace(raw)
         .replace(FOOTNOTE_MARKER, '')
         .replace(EDITORIAL_MARKER, '')
+        // A comma left stranded after a full stop once the marker between them
+        // is gone: "capturar».[12], Scoresby" -> "capturar». , Scoresby". The
+        // space is required, so a legitimate "etc., y" is untouched.
+        .replace(/([.!?])\s+,/g, '$1')
         .replace(/\s+([,.])/g, '$1')
     );
   }
