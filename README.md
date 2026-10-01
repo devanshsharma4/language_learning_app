@@ -8,12 +8,9 @@ understood it, writing prompts, and AI feedback on what you write back.
 
 ### → **[articulo-fawn.vercel.app](https://articulo-fawn.vercel.app)**
 
-**[Try a lesson without signing up](https://articulo-fawn.vercel.app/lessons/demo)** — the
-demo is graded in your browser, no account needed.
 
 > Hosted on free tiers. If the API has been idle for 15 minutes the first lesson takes
-> ~50 seconds to generate while the server wakes; after that it's ~8 seconds. The UI tells
-> you which is happening rather than leaving you guessing.
+> ~50 seconds while the server wakes; after that it's ~8 seconds.
 
 ---
 
@@ -27,6 +24,73 @@ around that.
 The design consequence is that **the article is the centre of the screen**, not a quiz.
 Vocabulary is clickable inline where the word appears rather than in a separate list, so
 you learn a word in the sentence that taught it to you.
+
+Two decisions follow from the same instinct. **The demo needs no account** — it runs on a
+fixed lesson and grades multiple choice in the browser with the same comparison the server
+uses, so the score is real rather than theatre. And **the free text it can't grade is
+labelled ungraded** instead of being quietly scored, because a number you haven't earned is
+worse than an honest blank.
+
+The app is also slow in one specific place — a lesson takes about eight seconds, or fifty
+if the free-tier API has gone to sleep. Rather than hide that behind a spinner, the UI says
+which of the two is happening and counts up, because the complaint about a slow thing is
+usually that you can't tell whether it's working.
+
+---
+
+## Building the interface
+
+The article is the only thing on the lesson page that's allowed to be loud. Everything else
+— the margin, the questions, the outline — is set quietly around it.
+
+**A highlighted word is a `<span role="button">`, not a `<button>`.** A real button is a
+replaced inline-block and can't break across lines, so a multi-word phrase caught at the end
+of a line either overflows the measure or jumps whole to the next one. A span wraps
+naturally; the role and key handling restore what the element gave up. Typography made the
+markup decision, not the other way round.
+
+**The definition card can't cover what you were just reading.** It opens in the right
+margin, positioned against the word — but clamped so it never rides over the highlighter key
+above it or spills past the bottom of the article. The height estimate deliberately errs
+high, so the worst case is a card sitting slightly above its word rather than one running
+off the page.
+
+**Pages share a query cache, so moving between them costs nothing.** `['lessons']` and
+`['vocabulary', null]` are used verbatim by every page that needs them, with matching request
+limits. Arriving at the vocabulary page from the dashboard issues no new request, and the
+lesson's page number in the margin comes from the same cached list the history page renders.
+
+**Both destructive actions are optimistic, with rollback.** Deleting a lesson and removing a
+saved word apply immediately and restore the previous cache on error. Neither is worth a
+round trip of waiting, and both are rare enough to fail loudly when they do.
+
+**The auth guard is two-tier, because "no token" and "bad token" are different questions.**
+No token redirects instantly with zero network calls. A token that turns out to be expired
+redirects once `/auth/me` resolves. Both carry the attempted location, so signing in returns
+you where you were going instead of dumping you on the dashboard.
+
+**A wrong password is not an expired session.** The 401 interceptor used to hard-redirect on
+every 401, including the one from a failed sign-in — which reloaded the page and wiped both
+the form and the error message. A typo looked like the button simply not working. Login and
+register are now exempt, and only a stale session clears the token.
+
+**The lesson outline tracks the section you're reading by a trigger line**, not an
+IntersectionObserver. The usual "topmost visible section" approach assumes sections of
+similar height; these range from a long article to three short questions, so a tall section
+kept winning over the short one actually under the cursor. A scroll handler comparing
+heading positions against a fixed line, throttled with `requestAnimationFrame`, matches what
+the reader perceives.
+
+**Answers survive a reload.** All three answer types live in one `useReducer` seeded from
+`localStorage`, so a half-finished lesson is still half-finished after a refresh.
+
+**No flags anywhere** — a flag names a country, not a language, and the four languages here
+are spoken in far more than four. Two-letter codes instead.
+
+**Two colour systems that must never be confused.** Part of speech is always a marker
+stroke; language is always a solid chip. They reuse the same four hues, which is only safe
+because the forms never collide — so the colour is legible without a legend, and the legend
+is there anyway.
 
 ---
 
@@ -80,7 +144,7 @@ drives all of it, so the prompt templates can't drift apart.
 
 ---
 
-## Notable engineering decisions
+## Notable backend decisions
 
 **LLM output is validated at the boundary.** Every model response is parsed with a zod
 schema in `services/llm/types.ts` before anything downstream touches it, and retried with
@@ -269,39 +333,11 @@ page and look it up somewhere else.
 
 So: tap any word and get the same definition card the highlighted words get.
 
-**Two shapes, and they're not exclusive.** *Look it up now* answers the question while you're
-still in the sentence that raised it, which is when the answer is worth most. *Collect it for
-later* keeps you reading and turns the stops into a list you review afterwards. The first is
-the one to build — the second is what already happens when you hit save on the card, so it
-mostly falls out of the first.
-
-**Most of the pieces exist.** `DefinitionCard`, `Highlight` and the margin positioning are
-already built and don't care where a word came from. `saved_vocabulary` is keyed
-`UNIQUE(user_id, word, language)` with `lesson_id ON DELETE SET NULL`, so a word saved this
-way stores with no schema change — the column that links it to a lesson is already optional.
-`normalizePartOfSpeech()` already constrains the model's answer to the five values the
-colour coding depends on.
-
-**What's new is one endpoint**: `POST /api/vocabulary/lookup`, taking the word, the sentence
-around it, and the language, and returning the same shape `extractVocabulary` produces. It
-needs the sentence — `porte` is a door or he carries, and only the context decides. One Haiku
-call, so it must be rate-limited per `userId` like the other AI routes, and it should be
-cached on `(word, language)`: a single word is the cheapest thing in this codebase to cache
-and the most likely to be asked for twice.
-
-**The hard part is deciding what a word is.** Japanese and Korean don't put spaces between
-them, so "tap a word" has no boundary to find without a tokenizer — selection-by-drag is the
-honest fallback there. French elision has a milder version of the same problem: tapping
-`l'arrière-pays` could reasonably mean any of three things. And the model will define
-anything it's handed, including a proper noun, a typo, or a word from the site's navigation,
-so the card needs a graceful way to say *this isn't a word worth learning* instead of
-inventing an etymology for someone's surname.
 
 ---
 
 ## Known limitations
 
-Honest list — these are known, not undiscovered.
 
 - **No caching of AI responses.** The same article reprocessed costs four fresh calls, five
   from a link. Should be keyed on (article hash, language, difficulty). This is the single
@@ -325,20 +361,3 @@ Honest list — these are known, not undiscovered.
 
 [docs/SCALE.md](docs/SCALE.md) covers what breaks at 10k users in more depth — query costs,
 bundle size, where the N+1s are, and what I'd fix in what order.
-
----
-
-## On AI-assisted development
-
-This was built with heavy use of AI coding tools, which I'd rather state plainly than have
-inferred. What I think that changes, and doesn't:
-
-It made the volume of code possible in the time available. It did not make the decisions —
-the split grading, the per-difficulty question language, keying rate limits on user id, the
-choice to deploy frontend and API separately to keep cold starts off the critical path.
-Those came from thinking about what the product needed and what the failure modes were.
-
-It also produced bugs I had to find by using the app: a scoring scale mismatch that rendered
-every result as a number over 100%, a schema drift that made submission fail silently, and a
-vocabulary quiz that printed its own answer under every question. All three were found by
-sitting down and working through the app as a user, which is the part no tool did for me.
