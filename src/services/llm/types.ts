@@ -134,12 +134,14 @@ export const feedbackSchema = z.object({
 /**
  * Which extracted text blocks are the article body.
  *
- * No `.default([])`: an empty or absent `keep` must fail validation rather than
- * quietly mean "discard the whole article". The caller treats a failure as
- * "filter unavailable" and keeps every block.
+ * An empty `keep` is a valid answer, not an error: on a page with no article on
+ * it the honest reply is "none of these". Requiring at least one burned three
+ * retries and threw, every time, on exactly the pages that were never going to
+ * work. The caller guards against the filter eating a real article by refusing
+ * any result that drops most of the text, so emptiness is already safe there.
  */
 export const articleBodySchema = z.object({
-  keep: z.array(z.number().int().nonnegative()).min(1),
+  keep: z.array(z.number().int().nonnegative()),
 });
 
 export type ArticleBodyResult = z.infer<typeof articleBodySchema>;

@@ -16,6 +16,19 @@ import {
 /** lessons.article_title is VARCHAR(500); an over-long <title> used to fail the INSERT. */
 const TITLE_MAX_LENGTH = 500;
 
+/**
+ * Every apostrophe variant written as the ASCII one, so a word can be found in
+ * text that is typeset differently from how the model spelled it.
+ *
+ * Length-preserving on purpose: callers use the match offset to slice the
+ * original text, which only works while one character maps to one character.
+ */
+const APOSTROPHE_VARIANTS = /[‘’ʼ´`]/g;
+
+function foldApostrophes(text: string): string {
+  return text.replace(APOSTROPHE_VARIANTS, "'");
+}
+
 function truncateTitle(title: string | undefined): string | undefined {
   const trimmed = title?.trim();
   if (!trimmed) return undefined;
@@ -473,6 +486,31 @@ export class LessonService {
     const seen = new Set<string>();
     const unique: VocabularyItem[] = [];
     const haystack = articleText.toLowerCase();
+    const foldedHaystack = foldApostrophes(haystack);
+
+    /**
+     * Finds a word in the article and returns it spelled as the article spells
+     * it, or undefined if it genuinely is not there.
+     *
+     * The second attempt exists because of the apostrophe. Publishers typeset
+     * the typographic ’ (U+2019); the model answers with the ASCII '. So
+     * "chef-d'œuvre" failed a verbatim check against "chef-d’œuvre", the surface
+     * form was discarded, and the fallback to `word` carried the same wrong
+     * apostrophe — nothing highlighted. In French that is most elided words:
+     * l'art, n'avons, qu'il.
+     *
+     * Folding is one character for one character, so the match offset still
+     * indexes the real text and the substring taken from it is verbatim.
+     */
+    const locate = (candidate: string | undefined): string | undefined => {
+      const needle = candidate?.trim();
+      if (!needle) return undefined;
+
+      if (haystack.includes(needle.toLowerCase())) return needle;
+
+      const at = foldedHaystack.indexOf(foldApostrophes(needle.toLowerCase()));
+      return at === -1 ? undefined : articleText.slice(at, at + needle.length);
+    };
 
     for (const item of items) {
       const key = item.word?.trim().toLowerCase();
@@ -483,11 +521,12 @@ export class LessonService {
       // A surface form is only useful if it is really in the article -- it
       // exists so the reader can find and highlight the word. Models sometimes
       // return a plausible inflection that never occurs in the text, which
-      // would highlight nothing at all; drop those and fall back to `word`,
-      // which is the behaviour from before surface forms existed.
-      const surfaceForm = item.surfaceForm?.trim();
-      const usableSurfaceForm =
-        surfaceForm && haystack.includes(surfaceForm.toLowerCase()) ? surfaceForm : undefined;
+      // would highlight nothing at all.
+      //
+      // Falling back to locating `word` is not redundant with the frontend's
+      // own fallback: this one returns the article's spelling, so a dictionary
+      // form that differs only in punctuation still highlights.
+      const usableSurfaceForm = locate(item.surfaceForm) ?? locate(item.word);
 
       unique.push({ ...item, surfaceForm: usableSurfaceForm });
     }
