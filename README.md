@@ -257,6 +257,48 @@ handles it.
 
 ---
 
+## Planned
+
+### Looking up any word, not just the highlighted ones
+
+Right now the marked words are fixed when the lesson is made: `vocabularyTarget()` picks
+6–20 of them, they're stored on the lesson row, and everything else in the article is inert.
+That's backwards from how reading actually goes. The word you stop on is, by definition, one
+the model didn't predict you'd stop on — and today the only thing to do with it is leave the
+page and look it up somewhere else.
+
+So: tap any word and get the same definition card the highlighted words get.
+
+**Two shapes, and they're not exclusive.** *Look it up now* answers the question while you're
+still in the sentence that raised it, which is when the answer is worth most. *Collect it for
+later* keeps you reading and turns the stops into a list you review afterwards. The first is
+the one to build — the second is what already happens when you hit save on the card, so it
+mostly falls out of the first.
+
+**Most of the pieces exist.** `DefinitionCard`, `Highlight` and the margin positioning are
+already built and don't care where a word came from. `saved_vocabulary` is keyed
+`UNIQUE(user_id, word, language)` with `lesson_id ON DELETE SET NULL`, so a word saved this
+way stores with no schema change — the column that links it to a lesson is already optional.
+`normalizePartOfSpeech()` already constrains the model's answer to the five values the
+colour coding depends on.
+
+**What's new is one endpoint**: `POST /api/vocabulary/lookup`, taking the word, the sentence
+around it, and the language, and returning the same shape `extractVocabulary` produces. It
+needs the sentence — `porte` is a door or he carries, and only the context decides. One Haiku
+call, so it must be rate-limited per `userId` like the other AI routes, and it should be
+cached on `(word, language)`: a single word is the cheapest thing in this codebase to cache
+and the most likely to be asked for twice.
+
+**The hard part is deciding what a word is.** Japanese and Korean don't put spaces between
+them, so "tap a word" has no boundary to find without a tokenizer — selection-by-drag is the
+honest fallback there. French elision has a milder version of the same problem: tapping
+`l'arrière-pays` could reasonably mean any of three things. And the model will define
+anything it's handed, including a proper noun, a typo, or a word from the site's navigation,
+so the card needs a graceful way to say *this isn't a word worth learning* instead of
+inventing an etymology for someone's surname.
+
+---
+
 ## Known limitations
 
 Honest list — these are known, not undiscovered.
