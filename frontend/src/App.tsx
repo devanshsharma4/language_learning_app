@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ErrorBoundary from './components/ErrorBoundary';
 import RequireAuth from './components/RequireAuth';
 import RedirectIfAuthed from './components/RedirectIfAuthed';
+import ScrollToTop from './components/ScrollToTop';
 import Welcome from './pages/Welcome';
 import Dashboard from './pages/Dashboard';
 import LessonView from './pages/LessonView';
@@ -38,6 +39,7 @@ export default function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
+          <ScrollToTop />
           <Routes>
             {/* Public.
 

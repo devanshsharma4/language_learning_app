@@ -112,7 +112,6 @@ export default function LessonHistory() {
   }, [visible]);
 
   const gradedCount = lessons.filter((lesson) => lesson.completed).length;
-  const filtered = search.trim() || language || status !== 'all';
 
   return (
     <NotebookPage>
@@ -242,15 +241,11 @@ export default function LessonHistory() {
             </div>
 
             <ol className="m-0 flex list-none flex-col p-0">
-              {rows.map(({ lesson, page }, index) => (
+              {rows.map(({ lesson, page }) => (
                 <LessonRow
                   key={lesson.id}
                   lesson={lesson}
                   page={page}
-                  // Only the newest row overall, and only when nothing is
-                  // filtered — "the page you are on" is meaningless in a
-                  // narrowed list.
-                  featured={groupIndex === 0 && index === 0 && !filtered}
                   onDelete={(id) => remove.mutate(id)}
                   deleting={remove.isPending && String(remove.variables) === String(lesson.id)}
                 />

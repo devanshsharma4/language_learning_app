@@ -8,8 +8,6 @@ interface LessonRowProps {
   lesson: LessonSummary;
   /** Position in the notebook, oldest first. */
   page: number;
-  /** The newest row is set as a card, the rest as plain contents lines. */
-  featured?: boolean;
   onDelete: (id: string) => void;
   deleting: boolean;
 }
@@ -21,13 +19,7 @@ interface LessonRowProps {
  * ties a left-aligned title to right-aligned data across a wide gap, which is
  * exactly the problem a printed contents page solves the same way.
  */
-export default function LessonRow({
-  lesson,
-  page,
-  featured = false,
-  onDelete,
-  deleting,
-}: LessonRowProps) {
+export default function LessonRow({ lesson, page, onDelete, deleting }: LessonRowProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -65,15 +57,28 @@ export default function LessonRow({
 
   return (
     <li
-      className={`grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 py-4 lg:grid-cols-[3.5rem_minmax(0,1fr)_11rem_5rem_8rem_2.5rem] ${
-        featured
-          ? '-mx-3.5 rounded-xl border-[1.5px] border-line bg-white px-3.5 shadow-[0_10px_20px_-16px_rgba(30,34,48,0.4)]'
-          : 'border-b border-dashed border-line'
-      } ${deleting ? 'opacity-40' : ''}`}
+      className={`group relative -mx-3.5 grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 rounded-xl border-[1.5px] border-transparent px-3.5 py-4 lg:grid-cols-[3.5rem_minmax(0,1fr)_11rem_5rem_8rem_2.5rem]
+        after:pointer-events-none after:absolute after:inset-x-3.5 after:-bottom-px after:block after:border-b after:border-dashed after:border-line after:content-['']
+        hover:border-line hover:bg-white hover:shadow-[0_10px_20px_-16px_rgba(30,34,48,0.4)] hover:after:hidden
+        focus-within:border-line focus-within:bg-white focus-within:shadow-[0_10px_20px_-16px_rgba(30,34,48,0.4)] focus-within:after:hidden
+        ${/* An open menu holds the row lifted, so the pointer can wander off it
+             without the card dropping out from under the menu. */ ''}
+        ${menuOpen ? 'z-10 border-line bg-white shadow-[0_10px_20px_-16px_rgba(30,34,48,0.4)] after:hidden' : ''}
+        ${deleting ? 'opacity-40' : ''}`}
     >
       <span className="mono text-[13px] text-ink-3">p.{page}</span>
 
-      <Link to={href} className="flex min-w-0 items-baseline gap-3 text-ink no-underline">
+      {/*
+        * `before:absolute before:inset-0` stretches this one link over the whole
+        * row, so a click anywhere on it opens the lesson — without nesting the
+        * row's other controls inside an anchor, which is invalid and would make
+        * the ⋯ button unclickable. Everything that must stay clickable sits on
+        * z-10 above the overlay.
+        */}
+      <Link
+        to={href}
+        className="flex min-w-0 items-baseline gap-3 text-ink no-underline outline-none before:absolute before:inset-0 before:rounded-xl before:content-['']"
+      >
         <span className="truncate font-display text-[20px] font-bold">{title}</span>
         <span aria-hidden="true" className="min-w-5 flex-grow border-b-2 border-dotted border-line-strong" />
       </Link>
@@ -87,7 +92,7 @@ export default function LessonRow({
 
       <span className="mono hidden text-xs text-ink-3 lg:block">{shortDate(lesson.created_at)}</span>
 
-      <span className="col-start-3 row-start-1 justify-self-end lg:col-start-5 lg:justify-self-start">
+      <span className="relative z-10 col-start-3 row-start-1 justify-self-end lg:col-start-5 lg:justify-self-start">
         {lesson.completed && lesson.overall_score != null ? (
           <ScoreMark>{lesson.overall_score}%</ScoreMark>
         ) : (
@@ -103,14 +108,19 @@ export default function LessonRow({
         )}
       </span>
 
-      <div ref={containerRef} className="relative col-start-3 justify-self-end lg:col-start-6">
+      <div ref={containerRef} className="relative z-10 col-start-3 justify-self-end lg:col-start-6">
         <button
           type="button"
           onClick={() => (menuOpen ? closeMenu() : setMenuOpen(true))}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
           aria-label={`More options for ${title}`}
-          className="flex h-9 w-9 items-center justify-center rounded-lg bg-pen-badge text-ink-2 hover:text-ink"
+          /* Hidden until the row is hovered or focused, but never removed from
+             the tab order — opacity, not `display`, so it stays reachable by
+             keyboard and reveals itself when it takes focus. */
+          className={`flex h-9 w-9 items-center justify-center rounded-lg bg-pen-badge text-ink-2 transition-opacity hover:text-ink group-hover:opacity-100 group-focus-within:opacity-100 ${
+            menuOpen ? 'opacity-100' : 'opacity-0'
+          }`}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
             <circle cx="5" cy="12" r="2" />
