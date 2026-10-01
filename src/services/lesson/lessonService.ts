@@ -84,7 +84,10 @@ export class LessonService {
 
     // Extract article content
     if (articleInput.url) {
-      const extracted = await articleService.extractFromUrl(articleInput.url);
+      // The language is passed so `Accept-Language` asks for the edition the
+      // learner is studying — without it, a site with regional editions serves
+      // its English one and the lesson is built from a translation.
+      const extracted = await articleService.extractFromUrl(articleInput.url, language);
       articleText = extracted.text;
       articleTitle = extracted.title;
       articleUrl = articleInput.url;

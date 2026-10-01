@@ -88,7 +88,51 @@ function vocabQuestionLanguageRule(language: string, difficulty: string): string
     : `LANGUAGE REQUIREMENT (strict): Write every question and every answer option in ${language}, not in English. This learner reads ${language} at a ${difficulty} level.`;
 }
 
+/** How much of each block the model needs to judge it. Bounds the input. */
+const BLOCK_PREVIEW_LENGTH = 300;
+
 export const promptTemplates = {
+  /**
+   * Picks the article body out of the text blocks scraped from a page.
+   *
+   * This exists because structural rules cannot do it. The same tag holds the
+   * article on one site and an infobox on another -- lawlessfrench.com lays its
+   * article out in a `<table>` and puts its donation plea outside `<article>`,
+   * so a rule that drops tables deletes the article and keeps the plea. A model
+   * reading the text gets it right because it can tell Provençal abbey prose
+   * from "please consider making a donation".
+   *
+   * The model sees only already-parsed text, never the URL or the raw HTML.
+   */
+  articleBodySelection: (blocks: string[]) => {
+    const listing = blocks
+      .map((block, index) => `[${index}] ${block.slice(0, BLOCK_PREVIEW_LENGTH)}`)
+      .join('\n');
+
+    return `
+      Below are numbered text blocks scraped from a single web page, in the order
+      they appeared. Identify which blocks are the BODY of the article itself.
+
+      Exclude anything that is not the article's own prose:
+      - navigation, breadcrumbs, "read more" and related-article links
+      - image captions and photo credits
+      - site instructions and editorial notes addressed to the reader
+      - donation appeals, subscription offers, newsletter forms, cookie notices
+      - share buttons, clipboard confirmations and other widget text
+      - author bylines, timestamps and tag lists standing on their own
+
+      Keep every block of the article's actual prose, including the first and last
+      paragraphs. If the whole page is article prose, keep every block. If you are
+      unsure about a block, keep it -- dropping real text is worse than leaving a
+      stray line in.
+
+      Return ONLY JSON, with the indices in ascending order:
+      { "keep": [0, 1, 2] }
+
+      ${listing}
+    `;
+  },
+
   vocabularyExtraction: (text: string, language: string, difficulty: string) => `
     You are a language learning assistant. Extract key vocabulary words from the following ${language} text for a ${difficulty} level learner.
 

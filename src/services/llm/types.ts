@@ -131,6 +131,18 @@ export const feedbackSchema = z.object({
   overall_feedback: z.string().default(''),
 });
 
+/**
+ * Which extracted text blocks are the article body.
+ *
+ * No `.default([])`: an empty or absent `keep` must fail validation rather than
+ * quietly mean "discard the whole article". The caller treats a failure as
+ * "filter unavailable" and keeps every block.
+ */
+export const articleBodySchema = z.object({
+  keep: z.array(z.number().int().nonnegative()).min(1),
+});
+
+export type ArticleBodyResult = z.infer<typeof articleBodySchema>;
 export type VocabularyExtractionResult = z.infer<typeof vocabularyExtractionSchema>;
 export type QuestionGenerationResult = z.infer<typeof questionGenerationSchema>;
 export type VocabQuestionResult = z.infer<typeof vocabQuestionSchema>;

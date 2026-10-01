@@ -3,11 +3,13 @@ import type { ZodType } from 'zod';
 import { env } from '../../config/env';
 import { AppError } from '../../middleware/errorHandler';
 import {
+  ArticleBodyResult,
   VocabularyExtractionResult,
   QuestionGenerationResult,
   VocabQuestionResult,
   WritingPromptResult,
   FeedbackResult,
+  articleBodySchema,
   vocabularyExtractionSchema,
   questionGenerationSchema,
   vocabQuestionSchema,
@@ -111,6 +113,19 @@ class LLMService {
   ): Promise<QuestionGenerationResult> {
     const prompt = promptTemplates.questionGeneration(text, language, difficulty);
     return this.generateJSON(prompt, questionGenerationSchema, 'generateQuestions');
+  }
+
+  /**
+   * Which of these scraped text blocks are the article body.
+   *
+   * Runs before the four lesson-generation calls and feeds all of them, so it is
+   * sequential -- but it is the cheapest call in the pipeline (a few hundred
+   * input tokens, a list of integers back) and every later call is spent on
+   * whatever it returns.
+   */
+  async selectArticleBody(blocks: string[]): Promise<ArticleBodyResult> {
+    const prompt = promptTemplates.articleBodySelection(blocks);
+    return this.generateJSON(prompt, articleBodySchema, 'selectArticleBody');
   }
 
   async generateVocabQuestions(

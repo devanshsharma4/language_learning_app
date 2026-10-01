@@ -3,6 +3,7 @@ import net from 'net';
 import { JSDOM } from 'jsdom';
 import { Readability } from '@mozilla/readability';
 import { AppError } from '../../middleware/errorHandler';
+import { llmService } from '../llm/llmService';
 
 const FETCH_TIMEOUT_MS = 15000;
 
@@ -22,6 +23,71 @@ const MAX_BLOCKS = 60;
  */
 const LINK_LIST_MAX_LENGTH = 200;
 const LINK_LIST_DENSITY = 0.5;
+
+/**
+ * Floor on how much text the boilerplate filter may discard before we assume it
+ * misread the page and keep everything instead.
+ */
+const MIN_KEPT_RATIO = 0.25;
+
+/**
+ * Two User-Agents, tried in order, because no single one works everywhere.
+ *
+ * Le Monde challenges the self-identifying bot string and serves its block page
+ * with HTTP 200. lawlessfrench.com does the opposite: it 403s the Chrome string
+ * and serves the article happily to the bot. Announcing ourselves honestly is
+ * the better default, so the browser string is only the retry.
+ */
+const BOT_USER_AGENT = 'Mozilla/5.0 (compatible; ArticuloBot/1.0; +language-learning)';
+const BROWSER_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
+/** Statuses worth a second attempt under the other User-Agent. */
+const RETRY_WITH_OTHER_AGENT = new Set([401, 402, 403, 406, 429]);
+
+/**
+ * BCP-47 tags for `Accept-Language`, so a site with regional editions serves the
+ * one the learner is studying.
+ *
+ * This is not a nicety. Sending `en` first made Le Monde serve its *English*
+ * edition -- an English page, extracted successfully, for a French lesson.
+ */
+const CONTENT_LANGUAGE_TAGS: Record<string, string> = {
+  spanish: 'es',
+  french: 'fr',
+  japanese: 'ja',
+  korean: 'ko',
+};
+
+/**
+ * Phrases that mark an interstitial rather than an article: bot checks, consent
+ * walls and "turn on JavaScript" shells.
+ *
+ * These pages are the reason this check exists at all. Le Monde serves its
+ * challenge with **HTTP 200**, so `response.ok` passes, and at 209 characters it
+ * cleared the old 100-character floor -- a lesson was built from a Cloudflare
+ * notice, in English, for a French learner.
+ */
+const CHALLENGE_PATTERN =
+  /client challenge|checking your browser|enable javascript|javascript is required|captcha|access denied|unusual traffic|are you a robot/i;
+
+/** Body length under which a page is treated as a shell rather than an article. */
+const CHALLENGE_MAX_LENGTH = 1500;
+
+/**
+ * Index-page signal. Measured across real pages: homepages run 0.51-0.70 link
+ * density with 73-91 character paragraphs, articles 0.18-0.20 with 371-729.
+ * Both conditions must hold, so a link-dense encyclopedia article stays.
+ */
+const INDEX_LINK_DENSITY = 0.35;
+const INDEX_MEAN_BLOCK_LENGTH = 150;
+
+/**
+ * Floor for URL extraction, well above the 100 that let a 209-character block
+ * page through. Kept under 600 deliberately: lawlessfrench.com's abbey piece is
+ * a genuine 587-character article, and a floor that rejects it is too strict.
+ */
+const MIN_URL_ARTICLE_LENGTH = 300;
 
 /**
  * Bracketed editorial marks that encyclopedias leave inline: reference numbers
@@ -77,27 +143,14 @@ export class ArticleService {
   private readonly MIN_ARTICLE_LENGTH = 100;
 
   async extractFromUrl(
-    url: string
+    url: string,
+    language?: string
   ): Promise<{ title: string; text: string; truncated: boolean }> {
     try {
       await this.assertFetchableUrl(url);
 
-      // Without a timeout an unresponsive host holds the request open
-      // indefinitely, and this endpoint already costs four LLM calls.
-      const response = await fetch(url, {
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-        headers: {
-          // Some sites serve a stub or a block page to unknown clients.
-          'User-Agent': 'Mozilla/5.0 (compatible; LanguageLearningBot/1.0)',
-          Accept: 'text/html,application/xhtml+xml',
-        },
-      });
-
-      if (!response.ok) {
-        throw new AppError(400, 'Failed to fetch article from URL');
-      }
-
-      const html = await response.text();
+      const html = await this.fetchArticleHtml(url, language);
+      this.assertNotAnInterstitial(html);
 
       // Readability (Firefox Reader Mode) scores elements on how article-like
       // they look and returns the winning subtree, so it handles nesting and
@@ -110,7 +163,17 @@ export class ArticleService {
           ? viaReadability.blocks
           : this.extractTextContent(html);
 
-      const { text, truncated } = this.truncateToLimit(blocks.join('\n\n'));
+      this.assertLooksLikeArticle(blocks, viaReadability?.linkDensity ?? 0);
+
+      const body = await this.filterToArticleBody(blocks);
+      const { text, truncated } = this.truncateToLimit(body.join('\n\n'));
+
+      if (text.length < MIN_URL_ARTICLE_LENGTH) {
+        throw new AppError(
+          400,
+          "There wasn't enough article text on that page. If it's behind a login or loads as you scroll, paste the text instead."
+        );
+      }
 
       this.validateArticle(text);
 
@@ -169,11 +232,98 @@ export class ArticleService {
     }
   }
 
+  /**
+   * Fetches a page, retrying once under the other User-Agent when the first
+   * attempt is refused.
+   *
+   * Sites disagree about which client they trust, in both directions, so one
+   * string cannot serve them all -- see `BOT_USER_AGENT`. A refusal that
+   * survives both attempts is reported with the *second* status, which is the
+   * one the reader can act on.
+   */
+  private async fetchArticleHtml(url: string, language?: string): Promise<string> {
+    const headers = (userAgent: string): Record<string, string> => ({
+      'User-Agent': userAgent,
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      // The target language first, so a site with regional editions serves the
+      // one being studied rather than an English translation of it.
+      'Accept-Language': language
+        ? `${CONTENT_LANGUAGE_TAGS[language] ?? 'en'},en;q=0.5`
+        : 'en;q=0.8,*;q=0.5',
+    });
+
+    // Without a timeout an unresponsive host holds the request open
+    // indefinitely, and this endpoint already costs several LLM calls.
+    const attempt = (userAgent: string) =>
+      fetch(url, {
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        headers: headers(userAgent),
+      });
+
+    let response = await attempt(BOT_USER_AGENT);
+
+    if (!response.ok && RETRY_WITH_OTHER_AGENT.has(response.status)) {
+      response = await attempt(BROWSER_USER_AGENT);
+    }
+
+    if (!response.ok) {
+      throw new AppError(400, this.describeFetchFailure(response.status));
+    }
+
+    return response.text();
+  }
+
+  /** Names the real reason a fetch failed, so the reader can act on it. */
+  private describeFetchFailure(status: number): string {
+    if (status === 402 || status === 403 || status === 451) {
+      return 'That site requires a subscription or blocks automated readers. Open it in your browser and paste the text instead.';
+    }
+    if (status === 404) {
+      return "That page doesn't exist. Check the link and try again.";
+    }
+    if (status === 429) {
+      return 'That site is limiting how often it can be read. Try again in a few minutes, or paste the text instead.';
+    }
+    if (status >= 500) {
+      return "That site isn't responding properly right now. Try again shortly.";
+    }
+    return 'That page could not be read. Try pasting the text instead.';
+  }
+
+  /** Rejects bot checks, consent walls and JavaScript shells. */
+  private assertNotAnInterstitial(html: string): void {
+    // Only short documents: a real article may well contain the word "captcha",
+    // but a real article is not 800 bytes long.
+    if (html.length > CHALLENGE_MAX_LENGTH * 4) return;
+
+    const text = this.cleanText(html.replace(/<[^>]+>/g, ' '));
+    if (text.length <= CHALLENGE_MAX_LENGTH && CHALLENGE_PATTERN.test(text)) {
+      throw new AppError(
+        400,
+        'That site asked us to prove we are a browser, so the article could not be read. Open it in your browser and paste the text instead.'
+      );
+    }
+  }
+
+  /** Rejects homepages and section indexes, which are not one article. */
+  private assertLooksLikeArticle(blocks: string[], linkDensity: number): void {
+    if (blocks.length === 0) return;
+
+    const meanLength = this.totalLength(blocks) / blocks.length;
+
+    if (linkDensity > INDEX_LINK_DENSITY && meanLength < INDEX_MEAN_BLOCK_LENGTH) {
+      throw new AppError(
+        400,
+        'That looks like a homepage or a section listing rather than one article. Open the article you want and copy its link.'
+      );
+    }
+  }
+
   /** Returns null when Readability can't identify an article. */
   private extractWithReadability(
     html: string,
     url: string
-  ): { title: string; blocks: string[] } | null {
+  ): { title: string; blocks: string[]; linkDensity: number } | null {
     try {
       // jsdom does not execute scripts unless `runScripts` is set. Leave it
       // unset: this parses untrusted HTML from arbitrary sites.
@@ -185,12 +335,17 @@ export class ArticleService {
       // Readability picks the right *subtree*; it does not promise the subtree
       // contains only prose. Captions, infobox cells and widget text come with
       // it, which is what `blocksFromHtml` and then the LLM filter are for.
-      const blocks = this.blocksFromHtml(article.content ?? '');
+      const content = article.content ?? '';
+      const blocks = this.blocksFromHtml(content);
       if (blocks.length === 0) return null;
 
       return {
         title: this.cleanText(article.title ?? '') || 'Untitled Article',
         blocks,
+        // Measured across the whole chosen subtree, not the surviving blocks:
+        // the nav rows that mark a homepage are exactly what block filtering
+        // has just removed, so measuring afterwards would hide the signal.
+        linkDensity: this.linkDensity(content),
       };
     } catch {
       return null;
@@ -232,6 +387,25 @@ export class ArticleService {
       return blocks;
     } catch {
       return [];
+    }
+  }
+
+  /** Share of a fragment's visible text that sits inside links. */
+  private linkDensity(html: string): number {
+    try {
+      const { document } = new JSDOM(`<body>${html}</body>`).window;
+
+      const visible = (document.body.textContent ?? '').replace(/\s/g, '').length;
+      if (visible === 0) return 0;
+
+      const linked = Array.from(document.querySelectorAll('a')).reduce(
+        (total, anchor) => total + (anchor.textContent ?? '').replace(/\s/g, '').length,
+        0
+      );
+
+      return linked / visible;
+    } catch {
+      return 0;
     }
   }
 
@@ -383,6 +557,43 @@ export class ArticleService {
 
   private totalLength(blocks: string[]): number {
     return blocks.reduce((total, block) => total + block.length, 0);
+  }
+
+  /**
+   * Narrows scraped blocks to the article body, using the model as the judge.
+   *
+   * Every failure path returns the blocks unchanged. A filter that silently eats
+   * the article is far worse than one that leaves a stray line in: the lesson is
+   * built from whatever this returns, and four more LLM calls are spent on it.
+   * So the model's answer is only taken when it is well-formed, in range, and
+   * leaves most of the text standing.
+   */
+  private async filterToArticleBody(blocks: string[]): Promise<string[]> {
+    // One block is the whole article by definition, and there is nothing for the
+    // model to choose between.
+    if (blocks.length < 2) return blocks;
+
+    try {
+      const { keep } = await llmService.selectArticleBody(blocks);
+
+      const kept = [...new Set(keep)]
+        .filter((index) => index < blocks.length)
+        .sort((a, b) => a - b)
+        .map((index) => blocks[index] as string);
+
+      // Keeping almost nothing means the model misread the page, not that the
+      // page is almost all boilerplate -- a page that really is gets rejected by
+      // the article checks instead.
+      if (this.totalLength(kept) < this.totalLength(blocks) * MIN_KEPT_RATIO) {
+        return blocks;
+      }
+
+      return kept;
+    } catch {
+      // The filter is an improvement, not a dependency. If the model is
+      // unreachable the lesson should still be created.
+      return blocks;
+    }
   }
 
   private cleanText(text: string): string {
