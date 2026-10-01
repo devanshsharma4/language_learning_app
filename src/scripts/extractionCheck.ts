@@ -22,6 +22,12 @@ interface Case {
   language: string;
   /** What the extractor should do with this page. */
   expect: 'article' | 'reject';
+  /**
+   * For a rejection, what it must say. Refusing is only half the job — a
+   * message naming the wrong cause sends the reader off to wait for a block
+   * that will never lift.
+   */
+  expectMessage?: RegExp;
   /** Substrings that must NOT survive into an extracted article. */
   forbid?: string[];
   /** As `forbid`, where the junk varies in spacing or digits. */
@@ -103,6 +109,18 @@ const CASES: Case[] = [
     expect: 'reject',
   },
   {
+    // Vercel's Attack Challenge Mode answers 429 with 31KB of markup wrapping
+    // 276 characters of text. Two bugs met here: the status was trusted before
+    // the body was read, so this was reported as rate limiting ("try again in a
+    // few minutes" — which would never have worked), and the interstitial check
+    // skipped any document over 6KB, which is every challenge page.
+    name: 'storykorean — bot challenge served as 429',
+    url: 'https://storykorean.com/stories?level=beginner&story=tiger',
+    language: 'korean',
+    expect: 'reject',
+    expectMessage: /prove we are a browser/,
+  },
+  {
     // Nominally a topic index, but what it extracts is six paragraphs of
     // coherent single-topic prose — a good lesson. Kept as an `article` case on
     // purpose: it is the guard against index-detection growing strict enough to
@@ -172,6 +190,10 @@ async function run(): Promise<void> {
 
       if (testCase.expect === 'article') {
         problems.push('expected an article, but extraction was rejected');
+      }
+
+      if (testCase.expectMessage && !testCase.expectMessage.test(message)) {
+        problems.push(`rejected for the wrong reason; expected ${testCase.expectMessage}`);
       }
     }
 

@@ -70,10 +70,20 @@ const CONTENT_LANGUAGE_TAGS: Record<string, string> = {
  * notice, in English, for a French learner.
  */
 const CHALLENGE_PATTERN =
-  /client challenge|checking your browser|enable javascript|javascript is required|captcha|access denied|unusual traffic|are you a robot/i;
+  /client challenge|security checkpoint|checking your browser|verifying your browser|just a moment|enable javascript|javascript is required|captcha|access denied|unusual traffic|are you a robot/i;
 
-/** Body length under which a page is treated as a shell rather than an article. */
-const CHALLENGE_MAX_LENGTH = 1500;
+const CHALLENGE_MESSAGE =
+  'That site asked us to prove we are a browser, so the article could not be read. Open it in your browser and paste the text instead.';
+
+/**
+ * Visible-text length under which a page is treated as a shell rather than an
+ * article.
+ *
+ * Measured on *text*, never on markup. A Vercel challenge is 31KB of inline CSS
+ * and script wrapped around 276 characters of prose, so an early return keyed on
+ * document size skipped the check on exactly the pages it exists to catch.
+ */
+const CHALLENGE_MAX_TEXT_LENGTH = 1500;
 
 /**
  * Index-page signal. Measured across real pages: homepages run 0.51-0.70 link
@@ -510,11 +520,21 @@ export class ArticleService {
       response = await attempt(BROWSER_USER_AGENT);
     }
 
+    const html = await response.text();
+
     if (!response.ok) {
+      // The body is read before the status is trusted, because bot protection
+      // picks a status more or less at random: Vercel's Attack Challenge Mode
+      // answers 429, Cloudflare 403. Reporting 429 as rate limiting told the
+      // reader to "try again in a few minutes", which would never have worked —
+      // the challenge is served every time.
+      if (this.looksLikeInterstitial(html)) {
+        throw new UnreadableError(CHALLENGE_MESSAGE);
+      }
       throw new UnreadableError(this.describeFetchFailure(response.status));
     }
 
-    return response.text();
+    return html;
   }
 
   /** Names the real reason a fetch failed, so the reader can act on it. */
@@ -534,17 +554,27 @@ export class ArticleService {
     return 'That page could not be read. Try pasting the text instead.';
   }
 
+  /** True for a bot check, consent wall or JavaScript shell. */
+  private looksLikeInterstitial(html: string): boolean {
+    // Script and style bodies are stripped first. Without that, a page built by
+    // JavaScript measures as tens of thousands of "text" characters and clears
+    // the length test on the strength of its own bundle.
+    const text = this.cleanText(
+      html
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<[^>]+>/g, ' ')
+    );
+
+    // The length test is what keeps a real article safe: an article may well
+    // discuss captchas, but it is not 300 words long in total.
+    return text.length <= CHALLENGE_MAX_TEXT_LENGTH && CHALLENGE_PATTERN.test(text);
+  }
+
   /** Rejects bot checks, consent walls and JavaScript shells. */
   private assertNotAnInterstitial(html: string): void {
-    // Only short documents: a real article may well contain the word "captcha",
-    // but a real article is not 800 bytes long.
-    if (html.length > CHALLENGE_MAX_LENGTH * 4) return;
-
-    const text = this.cleanText(html.replace(/<[^>]+>/g, ' '));
-    if (text.length <= CHALLENGE_MAX_LENGTH && CHALLENGE_PATTERN.test(text)) {
-      throw new UnreadableError(
-        'That site asked us to prove we are a browser, so the article could not be read. Open it in your browser and paste the text instead.'
-      );
+    if (this.looksLikeInterstitial(html)) {
+      throw new UnreadableError(CHALLENGE_MESSAGE);
     }
   }
 
