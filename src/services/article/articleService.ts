@@ -3,6 +3,7 @@ import net from 'net';
 import { JSDOM } from 'jsdom';
 import { Readability } from '@mozilla/readability';
 import { AppError } from '../../middleware/errorHandler';
+import { env } from '../../config/env';
 import { llmService } from '../llm/llmService';
 
 const FETCH_TIMEOUT_MS = 15000;
@@ -89,6 +90,22 @@ const INDEX_MEAN_BLOCK_LENGTH = 150;
  */
 const MIN_URL_ARTICLE_LENGTH = 300;
 
+/**
+ * Jina Reader renders the page in a real browser and returns Markdown, which is
+ * the only way this server sees a JavaScript-built page -- both local
+ * extractors parse whatever HTML the origin sent, and run no scripts.
+ *
+ * It is slower than a plain fetch, so it gets a longer budget than
+ * FETCH_TIMEOUT_MS and is only ever reached after local extraction has failed.
+ */
+const READER_ENDPOINT = 'https://r.jina.ai/';
+const READER_TIMEOUT_MS = 25000;
+
+/** Markdown left by the reader: images, link syntax, heading rules, emphasis. */
+const MARKDOWN_IMAGE = /!\[[^\]]*\]\([^)]*\)/g;
+const MARKDOWN_LINK = /\[([^\]]*)\]\([^)]*\)/g;
+const MARKDOWN_DECORATION = /^[#>\s*_-]+|[*_`]+/g;
+
 /** `== Heading ==` lines in a Wikipedia plaintext extract. */
 const WIKI_HEADING = /^=+\s.*\s=+$/;
 
@@ -144,6 +161,21 @@ function isPrivateAddress(address: string): boolean {
   return true;
 }
 
+/**
+ * "We could not read this page", as opposed to "this page is not an article".
+ *
+ * Only the first is worth retrying through the hosted reader. A homepage is a
+ * homepage however it is fetched, so re-reading it would spend a slow request to
+ * reach the same rejection -- but a JavaScript shell or a blocked fetch is
+ * exactly what the reader exists to get past.
+ */
+class UnreadableError extends AppError {
+  constructor(message: string) {
+    super(400, message);
+    Object.setPrototypeOf(this, UnreadableError.prototype);
+  }
+}
+
 export class ArticleService {
   private readonly MAX_ARTICLE_LENGTH = 10000;
   private readonly MIN_ARTICLE_LENGTH = 100;
@@ -164,35 +196,19 @@ export class ArticleService {
         return { title: viaWikipedia.title, text, truncated };
       }
 
-      const html = await this.fetchArticleHtml(url, language);
-      this.assertNotAnInterstitial(html);
+      try {
+        return await this.extractByScraping(url, language);
+      } catch (failure) {
+        // Only "we could not read it" is worth a second, slower attempt.
+        if (!(failure instanceof UnreadableError)) throw failure;
 
-      // Readability (Firefox Reader Mode) scores elements on how article-like
-      // they look and returns the winning subtree, so it handles nesting and
-      // strips sidebars/comments. The regex extractor stays as a fallback for
-      // pages it can't score.
-      const viaReadability = this.extractWithReadability(html, url);
-      const title = viaReadability?.title ?? this.extractTitle(html);
-      const blocks =
-        viaReadability && this.totalLength(viaReadability.blocks) >= this.MIN_ARTICLE_LENGTH
-          ? viaReadability.blocks
-          : this.extractTextContent(html);
+        const viaReader = await this.extractWithReader(url);
+        if (viaReader) return viaReader;
 
-      this.assertLooksLikeArticle(blocks, viaReadability?.linkDensity ?? 0);
-
-      const body = await this.filterToArticleBody(blocks);
-      const { text, truncated } = this.truncateToLimit(body.join('\n\n'));
-
-      if (text.length < MIN_URL_ARTICLE_LENGTH) {
-        throw new AppError(
-          400,
-          "There wasn't enough article text on that page. If it's behind a login or loads as you scroll, paste the text instead."
-        );
+        // The local failure names the real problem; the reader's silence does
+        // not. Report the first one.
+        throw failure;
       }
-
-      this.validateArticle(text);
-
-      return { title, text, truncated };
     } catch (error) {
       if (error instanceof AppError) throw error;
       if (error instanceof Error && error.name === 'TimeoutError') {
@@ -245,6 +261,122 @@ export class ArticleService {
     if (addresses.length === 0 || addresses.some(isPrivateAddress)) {
       throw new AppError(400, 'That URL points to a private address and cannot be fetched.');
     }
+  }
+
+  /** Fetch the page and read the article out of its HTML. */
+  private async extractByScraping(
+    url: string,
+    language?: string
+  ): Promise<{ title: string; text: string; truncated: boolean }> {
+    const html = await this.fetchArticleHtml(url, language);
+    this.assertNotAnInterstitial(html);
+
+    // Readability (Firefox Reader Mode) scores elements on how article-like
+    // they look and returns the winning subtree, so it handles nesting and
+    // strips sidebars/comments. The regex extractor stays as a fallback for
+    // pages it can't score.
+    const viaReadability = this.extractWithReadability(html, url);
+    const title = viaReadability?.title ?? this.extractTitle(html);
+    const blocks =
+      viaReadability && this.totalLength(viaReadability.blocks) >= this.MIN_ARTICLE_LENGTH
+        ? viaReadability.blocks
+        : this.extractTextContent(html);
+
+    this.assertLooksLikeArticle(blocks, viaReadability?.linkDensity ?? 0);
+
+    const body = await this.filterToArticleBody(blocks);
+    const { text, truncated } = this.truncateToLimit(body.join('\n\n'));
+
+    if (text.length < MIN_URL_ARTICLE_LENGTH) {
+      throw new UnreadableError(
+        "There wasn't enough article text on that page. If it's behind a login or loads as you scroll, paste the text instead."
+      );
+    }
+
+    this.validateArticle(text);
+
+    return { title, text, truncated };
+  }
+
+  /**
+   * Last resort: let a hosted reader render the page and return its text.
+   *
+   * This is the only path that sees a JavaScript-built page, because it runs a
+   * real browser elsewhere. Disabled unless `JINA_API_KEY` is set, and silent
+   * on every failure -- the caller falls back to reporting the local error,
+   * which describes the real problem more precisely than "the reader also
+   * failed" would.
+   *
+   * Its output is treated as another extractor's guess, not as truth: the same
+   * boilerplate filter and article checks run over it.
+   */
+  private async extractWithReader(
+    url: string
+  ): Promise<{ title: string; text: string; truncated: boolean } | null> {
+    if (!env.JINA_API_KEY) return null;
+
+    try {
+      const response = await fetch(`${READER_ENDPOINT}${url}`, {
+        signal: AbortSignal.timeout(READER_TIMEOUT_MS),
+        headers: {
+          Authorization: `Bearer ${env.JINA_API_KEY}`,
+          Accept: 'text/plain',
+          'X-Return-Format': 'markdown',
+        },
+      });
+      if (!response.ok) return null;
+
+      const markdown = await response.text();
+      const { title, blocks } = this.blocksFromMarkdown(markdown);
+      if (blocks.length === 0) return null;
+
+      const body = await this.filterToArticleBody(blocks);
+      const { text, truncated } = this.truncateToLimit(body.join('\n\n'));
+
+      if (text.length < MIN_URL_ARTICLE_LENGTH) return null;
+
+      return { title, text, truncated };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Paragraphs from the reader's Markdown.
+   *
+   * The reader prefixes its output with `Title:` / `URL Source:` / `Published
+   * Time:` lines before `Markdown Content:`, and leaves link and image syntax
+   * inline. None of that is prose, and `[text](url)` reaching a vocabulary
+   * prompt would be read as words.
+   */
+  private blocksFromMarkdown(markdown: string): { title: string; blocks: string[] } {
+    const titleLine = markdown.match(/^Title:\s*(.+)$/m);
+    const contentStart = markdown.indexOf('Markdown Content:');
+    const content =
+      contentStart === -1
+        ? markdown
+        : markdown.slice(contentStart + 'Markdown Content:'.length);
+
+    const blocks: string[] = [];
+
+    for (const paragraph of content.split(/\n{2,}/)) {
+      if (blocks.length >= MAX_BLOCKS) break;
+
+      const text = this.cleanBlockText(
+        paragraph
+          .replace(MARKDOWN_IMAGE, ' ')
+          .replace(MARKDOWN_LINK, '$1')
+          .replace(MARKDOWN_DECORATION, ' ')
+      );
+
+      if (text.length <= MIN_BLOCK_LENGTH) continue;
+      blocks.push(text);
+    }
+
+    return {
+      title: this.cleanText(titleLine?.[1] ?? '') || 'Untitled Article',
+      blocks,
+    };
   }
 
   /**
@@ -379,7 +511,7 @@ export class ArticleService {
     }
 
     if (!response.ok) {
-      throw new AppError(400, this.describeFetchFailure(response.status));
+      throw new UnreadableError(this.describeFetchFailure(response.status));
     }
 
     return response.text();
@@ -410,8 +542,7 @@ export class ArticleService {
 
     const text = this.cleanText(html.replace(/<[^>]+>/g, ' '));
     if (text.length <= CHALLENGE_MAX_LENGTH && CHALLENGE_PATTERN.test(text)) {
-      throw new AppError(
-        400,
+      throw new UnreadableError(
         'That site asked us to prove we are a browser, so the article could not be read. Open it in your browser and paste the text instead.'
       );
     }

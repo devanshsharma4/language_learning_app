@@ -20,6 +20,17 @@ const envSchema = z.object({
    * Empty in development, where the Vite proxy makes requests same-origin.
    */
   CORS_ORIGIN: z.string().optional(),
+  /**
+   * Optional. Enables the Jina Reader fallback for pages this server cannot
+   * read itself — chiefly ones rendered by JavaScript, which neither extractor
+   * can handle because both parse the HTML the server sent.
+   *
+   * Without it the fallback is simply skipped; nothing else changes. Anonymous
+   * requests to the service are refused, so there is no useful default.
+   *
+   * Note that enabling it sends the article URL to a third party.
+   */
+  JINA_API_KEY: z.string().optional(),
 });
 
 const envResult = envSchema.safeParse(process.env);
