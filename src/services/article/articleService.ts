@@ -6,6 +6,36 @@ import { AppError } from '../../middleware/errorHandler';
 
 const FETCH_TIMEOUT_MS = 15000;
 
+/** Shorter than this is a label or a widget caption, not a sentence of prose. */
+const MIN_BLOCK_LENGTH = 20;
+
+/**
+ * Upper bound on blocks carried through the pipeline. Bounds the LLM filter's
+ * input, and no article needs more: the text is capped at 10,000 characters
+ * anyway, which no well-formed page reaches in 60 paragraphs.
+ */
+const MAX_BLOCKS = 60;
+
+/**
+ * A paragraph this long is prose whatever its link density -- Wikipedia body
+ * text is dense with wikilinks and must not be mistaken for a nav list.
+ */
+const LINK_LIST_MAX_LENGTH = 200;
+const LINK_LIST_DENSITY = 0.5;
+
+/**
+ * Bracketed editorial marks that encyclopedias leave inline: reference numbers
+ * and the maintenance tags beside them. They are extraction residue, not words
+ * to learn, and the model treats them as text -- "[ 1 ]" was being offered as
+ * vocabulary.
+ *
+ * Deliberately narrow. A bracket is only dropped when its contents are a short
+ * reference label or one of the known editorial phrases; brackets in prose stay.
+ */
+const FOOTNOTE_MARKER = /\[\s*(?:\d{1,3}|[a-z]|[a-z]\s*\d{1,3}|n\s*\d{1,3})\s*\]/gi;
+const EDITORIAL_MARKER =
+  /\[\s*(?:citation needed|cita requerida|réf\.?[^\]]{0,20}|c'est-à-dire\s*\?|edit|editar(?:\s+datos[^\]]{0,20})?|要出典|출처\s*필요)\s*\]/gi;
+
 /**
  * True for any address that is not routable on the public internet: loopback,
  * RFC1918 private ranges, link-local (which covers cloud metadata endpoints at
@@ -74,13 +104,13 @@ export class ArticleService {
       // strips sidebars/comments. The regex extractor stays as a fallback for
       // pages it can't score.
       const viaReadability = this.extractWithReadability(html, url);
-      if (viaReadability && viaReadability.text.length >= this.MIN_ARTICLE_LENGTH) {
-        const { text, truncated } = this.truncateToLimit(viaReadability.text);
-        return { title: viaReadability.title, text, truncated };
-      }
+      const title = viaReadability?.title ?? this.extractTitle(html);
+      const blocks =
+        viaReadability && this.totalLength(viaReadability.blocks) >= this.MIN_ARTICLE_LENGTH
+          ? viaReadability.blocks
+          : this.extractTextContent(html);
 
-      const title = this.extractTitle(html);
-      const { text, truncated } = this.truncateToLimit(this.extractTextContent(html));
+      const { text, truncated } = this.truncateToLimit(blocks.join('\n\n'));
 
       this.validateArticle(text);
 
@@ -143,7 +173,7 @@ export class ArticleService {
   private extractWithReadability(
     html: string,
     url: string
-  ): { title: string; text: string } | null {
+  ): { title: string; blocks: string[] } | null {
     try {
       // jsdom does not execute scripts unless `runScripts` is set. Leave it
       // unset: this parses untrusted HTML from arbitrary sites.
@@ -152,22 +182,96 @@ export class ArticleService {
 
       if (!article) return null;
 
-      // Reuse the paragraph extractor on Readability's cleaned HTML rather than
-      // its `textContent`, which runs paragraphs together. Readability picks
-      // the right subtree; this preserves the blank lines between paragraphs.
-      const text =
-        this.extractParagraphs(article.content ?? '') ||
-        this.cleanText(article.textContent ?? '');
-
-      if (!text) return null;
+      // Readability picks the right *subtree*; it does not promise the subtree
+      // contains only prose. Captions, infobox cells and widget text come with
+      // it, which is what `blocksFromHtml` and then the LLM filter are for.
+      const blocks = this.blocksFromHtml(article.content ?? '');
+      if (blocks.length === 0) return null;
 
       return {
         title: this.cleanText(article.title ?? '') || 'Untitled Article',
-        text,
+        blocks,
       };
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Paragraph-level blocks from a fragment of HTML, in document order.
+   *
+   * Parsed with jsdom rather than a regex, which fixes a corruption bug as a
+   * side effect: `cleanText` replaces every inline tag with a space, so an
+   * `<em>` inside a word produced "nous n' avons" and a trailing `<a>` produced
+   * "en novembre ,". That text then went to the model, and
+   * `normalizeVocabulary()` verifies each `surfaceForm` occurs *verbatim* --
+   * so a stray space silently dropped a highlight. `textContent` has no such
+   * problem and decodes entities on the way out.
+   */
+  private blocksFromHtml(html: string): string[] {
+    try {
+      const { document } = new JSDOM(`<body>${html}</body>`).window;
+      const blocks: string[] = [];
+
+      for (const paragraph of Array.from(document.querySelectorAll('p'))) {
+        if (blocks.length >= MAX_BLOCKS) break;
+
+        const text = this.cleanBlockText(paragraph.textContent ?? '');
+        if (text.length <= MIN_BLOCK_LENGTH) continue;
+
+        // The only structural drops safe to make here. A blanket ban on
+        // `table` or `aside` inverts on real sites -- lawlessfrench.com lays
+        // its article out in a <table>, so that rule deleted the article and
+        // kept the donation plea. Anything subtler is the LLM filter's job.
+        if (paragraph.closest('figcaption, form')) continue;
+        if (this.isLinkList(paragraph, text)) continue;
+
+        blocks.push(text);
+      }
+
+      return blocks;
+    } catch {
+      return [];
+    }
+  }
+
+  /** A short block that is mostly link text: a nav row or a "related" list. */
+  private isLinkList(paragraph: Element, text: string): boolean {
+    if (text.length >= LINK_LIST_MAX_LENGTH) return false;
+
+    const visible = text.replace(/\s/g, '').length;
+    if (visible === 0) return true;
+
+    const linked = Array.from(paragraph.querySelectorAll('a')).reduce(
+      (total, anchor) => total + (anchor.textContent ?? '').replace(/\s/g, '').length,
+      0
+    );
+
+    return linked / visible > LINK_LIST_DENSITY;
+  }
+
+  private normalizeWhitespace(text: string): string {
+    return text.replace(/\s+/g, ' ').trim();
+  }
+
+  /**
+   * One paragraph of prose, with extraction residue removed.
+   *
+   * Removing a reference marker leaves the space that sat around it, which
+   * strands the punctuation that followed: "«...capturar».[12], Scoresby"
+   * becomes "». , Scoresby". So markers go first, then any space before a comma
+   * or full stop is closed up.
+   *
+   * Only `,` and `.` are closed up. French puts a genuine space before `; : ? !`
+   * and inside `« »`, and collapsing those would corrupt correctly typeset text.
+   */
+  private cleanBlockText(raw: string): string {
+    return this.normalizeWhitespace(
+      this.normalizeWhitespace(raw)
+        .replace(FOOTNOTE_MARKER, '')
+        .replace(EDITORIAL_MARKER, '')
+        .replace(/\s+([,.])/g, '$1')
+    );
   }
 
   /**
@@ -230,7 +334,7 @@ export class ArticleService {
     return 'Untitled Article';
   }
 
-  private extractTextContent(html: string): string {
+  private extractTextContent(html: string): string[] {
     // Remove non-content elements outright.
     let text = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
     text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
@@ -259,10 +363,10 @@ export class ArticleService {
       }
     }
 
-    let best = '';
+    let best: string[] = [];
     for (const candidate of candidates) {
-      const extracted = this.extractParagraphs(candidate);
-      if (extracted.length > best.length) {
+      const extracted = this.blocksFromHtml(candidate);
+      if (this.totalLength(extracted) > this.totalLength(best)) {
         best = extracted;
       }
     }
@@ -271,22 +375,14 @@ export class ArticleService {
       return best;
     }
 
-    // No usable paragraphs anywhere: strip tags from the full document.
-    return this.cleanText(text.replace(/<[^>]+>/g, ' '));
+    // No usable paragraphs anywhere: strip tags from the full document and
+    // treat the result as a single block.
+    const stripped = this.cleanText(text.replace(/<[^>]+>/g, ' '));
+    return stripped ? [stripped] : [];
   }
 
-  /** Joined text of every <p> in a fragment, skipping short boilerplate. */
-  private extractParagraphs(fragment: string): string {
-    const paragraphs: string[] = [];
-
-    for (const match of fragment.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)) {
-      const cleanedText = this.cleanText(match[1]);
-      if (cleanedText.length > 20) {
-        paragraphs.push(cleanedText);
-      }
-    }
-
-    return paragraphs.join('\n\n');
+  private totalLength(blocks: string[]): number {
+    return blocks.reduce((total, block) => total + block.length, 0);
   }
 
   private cleanText(text: string): string {
